@@ -5,9 +5,22 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { createPresignedUpload } from "@/lib/storage";
 
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+];
+
 const requestSchema = z.object({
   filename: z.string().min(1),
-  mime: z.string().min(1).refine((value) => value.startsWith("image/"), "Nur Bildformate sind erlaubt."),
+  mime: z.string().min(1).refine(
+    (value) => ALLOWED_IMAGE_TYPES.includes(value),
+    "Nur JPEG, PNG, HEIC, WebP, GIF und AVIF Formate sind erlaubt."
+  ),
   size: z.number().int().positive().max(50 * 1024 * 1024, "Dateien dürfen maximal 50MB groß sein."),
 });
 

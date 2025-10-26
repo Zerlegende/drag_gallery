@@ -8,9 +8,9 @@ Eine Progressive Web App (PWA) zum Verwalten, Taggen und Filtern von Bildern. Di
 - **Tailwind CSS + shadcn/ui** für ein flexibles, dunkles UI-Design.
 - **Drag & Drop Galerie** via `@dnd-kit` inklusive Sortierung und Filter nach Tags.
 - **Upload-Flow mit Presigned S3 URLs** (`react-dropzone`) und anschließender Persistierung der Metadaten in Postgres.
-- **Auth.js (NextAuth)** mit GitHub- und E-Mail-Provider; Middleware schützt Upload- und Mutationsrouten.
+- **Auth.js (NextAuth)** mit Username/Passwort und optional GitHub OAuth; Middleware schützt Upload- und Mutationsrouten.
 - **PWA Ready** dank `next-pwa`, Manifest und Service Worker (installierbar, offlinefähig für Assets).
-- **Postgres Schema** mit `images`, `tags` und `image_tags` (m:n) – inkl. API-Routen für Upload, Tagging, Reordering und Abfragen.
+- **Postgres Schema** mit `users`, `images`, `tags` und `image_tags` (m:n) – inkl. API-Routen für Upload, Tagging, Reordering und Abfragen.
 
 ## Erste Schritte (lokal)
 
@@ -35,7 +35,7 @@ yarn dev
 | `MINIO_ENDPOINT` / `MINIO_BUCKET` / `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | MinIO Konfiguration auf Railway. |
 | `NEXT_PUBLIC_MINIO_BASE_URL` | Öffentliche URL, unter der Objekte erreichbar sind (`https://…/bucket`). |
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL` | NextAuth-Setup (Secret, Basis-URL der App). |
-| `EMAIL_*`, `GITHUB_*` | Provider-Credentials für Auth.js. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | Optional: GitHub OAuth Provider. |
 | `NEXT_PUBLIC_APP_NAME` | Anzeigename der Anwendung. |
 
 Siehe `.env.example` für eine vollständige Vorlage.
@@ -47,6 +47,14 @@ SQL-Definition der benötigten Tabellen (z. B. via `psql` ausführen):
 ```sql
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Users (Username + gehashtes Passwort)
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  username TEXT UNIQUE NOT NULL,
+  hashed_password TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS images (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   filename TEXT NOT NULL,
@@ -55,7 +63,7 @@ CREATE TABLE IF NOT EXISTS images (
   size BIGINT,
   width INT,
   height INT,
-  uploaded_by UUID,
+  uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
   position INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -72,6 +80,18 @@ CREATE TABLE IF NOT EXISTS image_tags (
 );
 ```
 
+Das vollständige Schema liegt in `db/schema.sql`.
+
+### User erstellen
+
+Nutze das Hilfsscript, um einen User anzulegen oder ein Passwort zurückzusetzen:
+
+```powershell
+node scripts/create-user.js admin MySecurePass123
+```
+
+Das Passwort wird automatisch mit bcrypt gehasht.
+
 ## Architekturüberblick
 
 - `src/app/page.tsx` – Server Component, lädt Bilder + Tags und übergibt sie an den Client.
@@ -79,7 +99,7 @@ CREATE TABLE IF NOT EXISTS image_tags (
 - `src/app/api/*` – REST-Endpoints für Upload (Presigned URL), Metadaten, Reordering und Tagliste.
 - `src/lib/db.ts` – Postgres Utility mit Connection Pool und Helferfunktionen.
 - `src/lib/storage.ts` – MinIO/S3 Presigned Post Helper.
-- `src/lib/auth.ts` – Auth.js Konfiguration (GitHub + E-Mail Provider).
+- `src/lib/auth.ts` – Auth.js Konfiguration (Username/Passwort + optional GitHub Provider).
 - `public/manifest.json` & `next.config.mjs` – PWA Konfiguration (Workbox Caching). 
 
 ## Deployment auf Railway

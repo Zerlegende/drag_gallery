@@ -19,15 +19,17 @@ function buildImageUrl(key: string, fallback: string) {
 export type ImageDetailDialogProps = {
   image: ImageWithTags | null;
   onOpenChange: (open: boolean) => void;
-  onSave: (id: string, tags: string[]) => void;
+  onSave: (id: string, data: { tags?: string[]; imagename?: string }) => void;
 };
 
 export function ImageDetailDialog({ image, onOpenChange, onSave }: ImageDetailDialogProps) {
   const [tagInput, setTagInput] = useState("");
+  const [imageNameInput, setImageNameInput] = useState("");
 
   useEffect(() => {
     if (image) {
       setTagInput(image.tags.map((tag) => tag.name).join(", "));
+      setImageNameInput(image.imagename || "");
     }
   }, [image]);
 
@@ -43,7 +45,11 @@ export function ImageDetailDialog({ image, onOpenChange, onSave }: ImageDetailDi
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean);
-    onSave(image.id, tags);
+    
+    onSave(image.id, {
+      tags,
+      imagename: imageNameInput.trim() || undefined,
+    });
   };
 
   return (
@@ -60,6 +66,17 @@ export function ImageDetailDialog({ image, onOpenChange, onSave }: ImageDetailDi
             <img src={imageUrl} alt={image.filename} className="w-full" />
           </div>
           <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground" htmlFor="detail-imagename">
+              Bildname
+            </label>
+            <Input
+              id="detail-imagename"
+              value={imageNameInput}
+              onChange={(event) => setImageNameInput(event.target.value)}
+              placeholder="Optionaler Name für das Bild"
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground" htmlFor="detail-tags">
               Tags aktualisieren
             </label>
@@ -71,7 +88,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave }: ImageDetailDi
             />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex gap-2">
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             Schließen
           </Button>

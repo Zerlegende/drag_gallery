@@ -3,6 +3,7 @@ import { z } from "zod";
 const serverEnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   MINIO_ENDPOINT: z.string().url(),
+  MINIO_PUBLIC_ENDPOINT: z.string().url().optional(),
   MINIO_BUCKET: z.string(),
   MINIO_ACCESS_KEY: z.string(),
   MINIO_SECRET_KEY: z.string(),
@@ -10,11 +11,6 @@ const serverEnvSchema = z.object({
   MINIO_USE_SSL: z.enum(["true", "false"]).default("false"),
   NEXTAUTH_SECRET: z.string().min(16),
   NEXTAUTH_URL: z.string().url().optional(),
-  EMAIL_SERVER_HOST: z.string().optional(),
-  EMAIL_SERVER_PORT: z.coerce.number().optional(),
-  EMAIL_SERVER_USER: z.string().optional(),
-  EMAIL_SERVER_PASSWORD: z.string().optional(),
-  EMAIL_FROM: z.string().email().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
 });

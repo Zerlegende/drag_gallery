@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import type { PoolClient } from "pg";
+import type { PoolClient, QueryResultRow } from "pg";
 
 import { env } from "@/lib/env";
 
@@ -12,6 +12,7 @@ const pool = new Pool({
 export type ImageRecord = {
   id: string;
   filename: string;
+  imagename: string | null;
   key: string;
   mime: string | null;
   size: number | null;
@@ -29,7 +30,7 @@ export type TagRecord = {
 
 export type ImageWithTags = ImageRecord & { tags: TagRecord[] };
 
-export async function query<T>(sql: string, params: unknown[] = []) {
+export async function query<T extends QueryResultRow = any>(sql: string, params: unknown[] = []) {
   const client = await pool.connect();
   try {
     const result = await client.query<T>(sql, params);
@@ -54,11 +55,28 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
   }
 }
 
-function mapImageRows(rows: ({ tags: string } & ImageRecord)[]) {
-  return rows.map((row) => ({
-    ...row,
-    tags: JSON.parse(row.tags) as TagRecord[],
-  }));
+function mapImageRows(rows: ({ tags: string | TagRecord[] } & ImageRecord)[]) {
+  return rows.map((row) => {
+    let tags: TagRecord[] = [];
+    
+    if (typeof row.tags === 'string') {
+      if (row.tags && row.tags.trim() !== '') {
+        try {
+          tags = JSON.parse(row.tags);
+        } catch (e) {
+          console.error('Failed to parse tags:', row.tags, e);
+          tags = [];
+        }
+      }
+    } else if (Array.isArray(row.tags)) {
+      tags = row.tags;
+    }
+    
+    return {
+      ...row,
+      tags,
+    };
+  });
 }
 
 export async function getImagesWithTags(filterTags: string[] = []) {
@@ -112,8 +130,23 @@ export async function getImageById(id: string) {
   return image ?? null;
 }
 
+export async function updateImageName(imageId: string, imageName: string) {
+  await query(
+    "UPDATE images SET imagename = $1 WHERE id = $2",
+    [imageName.trim() || null, imageId]
+  );
+}
+
 export async function getAllTags() {
   return query<TagRecord>("SELECT * FROM tags ORDER BY name ASC");
+}
+
+export async function checkImageExists(filename: string, size: number): Promise<boolean> {
+  const result = await query<{ count: string }>(
+    "SELECT COUNT(*) as count FROM images WHERE filename = $1 AND size = $2",
+    [filename, size]
+  );
+  return parseInt(result[0]?.count || "0", 10) > 0;
 }
 
 export async function upsertTags(client: PoolClient, tagNames: string[]) {
