@@ -1,143 +1,106 @@
 # bz_bilder_collector — Installierbare Web‑App zur Bildverwaltung
 
-Kurzbeschreibung
------------------
-Eine PWA‑Webanwendung zur interaktiven Verwaltung von Bildern: Upload per Drag & Drop, Tags, Filter, Suche und eine Galerie mit Drag‑&‑Drop‑Sortierung. Zielplattform: Railway (Postgres + MinIO auf Railway). Keine externen Dienste außer dem eigenen MinIO auf Railway.
+Eine Progressive Web App (PWA) zum Verwalten, Taggen und Filtern von Bildern. Die Anwendung ist für eine Bereitstellung auf Railway optimiert und nutzt dort Postgres für Metadaten sowie MinIO (S3-kompatibel) für die Speicherung von Bilddateien. Dank Presigned Uploads werden Dateien direkt vom Browser an MinIO gesendet – der Next.js-Server bleibt schlank und dient als Kontroll- und Metadaten-Layer.
 
-Tech Stack
-----------
-- Next.js (App Router)
-- Tailwind CSS + shadcn/ui
-- dnd‑kit (Drag & Drop)
-- react‑dropzone (Upload UI)
-- PostgreSQL (Railway Add‑on) — Metadaten & Tags
-- MinIO (S3‑kompatibel) auf Railway + Volume — Bildspeicher
-- PWA (installierbar) — next‑pwa / Service Worker
-- Auth.js (E‑Mail / OAuth)
+## Highlights
 
-MVP Features
-------------
-- Bilder hochladen (Drag & Drop, client → presigned URL → direkt zu MinIO)
-- Tags hinzufügen, filtern und kombinieren
-- Galerie: Grid‑Ansicht, Drag & Drop für Sortierung
-- Klick auf ein Bild → Detail‑Ansicht / größeres Vorschaubild
-- PWA: installierbar, fullscreen, Offline‑Cache für UI und bereits geladene Bilder
+- **Next.js 14 (App Router)** mit TypeScript und Server Components.
+- **Tailwind CSS + shadcn/ui** für ein flexibles, dunkles UI-Design.
+- **Drag & Drop Galerie** via `@dnd-kit` inklusive Sortierung und Filter nach Tags.
+- **Upload-Flow mit Presigned S3 URLs** (`react-dropzone`) und anschließender Persistierung der Metadaten in Postgres.
+- **Auth.js (NextAuth)** mit GitHub- und E-Mail-Provider; Middleware schützt Upload- und Mutationsrouten.
+- **PWA Ready** dank `next-pwa`, Manifest und Service Worker (installierbar, offlinefähig für Assets).
+- **Postgres Schema** mit `images`, `tags` und `image_tags` (m:n) – inkl. API-Routen für Upload, Tagging, Reordering und Abfragen.
 
-Technische Anforderungen (konkret)
----------------------------------
-- PWA manifest + Service Worker (z. B. next‑pwa)
-- Offline‑Caching (UI assets + Runtime caching der geladenen Bilder)
-- ENV‑Variablen für MinIO, DB, Auth etc. (siehe unten)
-- Next.js API Route für Presigned Uploads (`app/api/upload/route.ts`)
-- SQL Tabellen: `images`, `tags`, `image_tags` (m:n)
+## Erste Schritte (lokal)
 
-Datenbankschema (beispielhaft)
------------------------------
--- images: Metadaten der Bilder
-CREATE TABLE images (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+```bash
+# Abhängigkeiten installieren
+yarn install # oder npm install / pnpm install
+
+# .env Beispiel übernehmen und anpassen
+cp .env.example .env
+
+# Next.js Entwicklung starten
+yarn dev
+```
+
+> **Hinweis:** Im Container wurden keine Abhängigkeiten installiert. Für lokale Tests bitte die Abhängigkeiten mit npm, pnpm oder yarn installieren. Next.js benötigt Node.js ≥ 18.
+
+## Wichtige ENV-Variablen
+
+| Variable | Beschreibung |
+| --- | --- |
+| `DATABASE_URL` | Postgres Verbindung (Railway Add-on). |
+| `MINIO_ENDPOINT` / `MINIO_BUCKET` / `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | MinIO Konfiguration auf Railway. |
+| `NEXT_PUBLIC_MINIO_BASE_URL` | Öffentliche URL, unter der Objekte erreichbar sind (`https://…/bucket`). |
+| `NEXTAUTH_SECRET`, `NEXTAUTH_URL` | NextAuth-Setup (Secret, Basis-URL der App). |
+| `EMAIL_*`, `GITHUB_*` | Provider-Credentials für Auth.js. |
+| `NEXT_PUBLIC_APP_NAME` | Anzeigename der Anwendung. |
+
+Siehe `.env.example` für eine vollständige Vorlage.
+
+## Datenbank
+
+SQL-Definition der benötigten Tabellen (z. B. via `psql` ausführen):
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE IF NOT EXISTS images (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   filename TEXT NOT NULL,
-  key TEXT NOT NULL, -- S3/MinIO Objektkey
+  key TEXT NOT NULL,
   mime TEXT,
   size BIGINT,
   width INT,
   height INT,
-  uploaded_by UUID, -- user id
+  uploaded_by UUID,
+  position INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- tags
-CREATE TABLE tags (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE IF NOT EXISTS tags (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT UNIQUE NOT NULL
 );
 
--- many-to-many
-CREATE TABLE image_tags (
+CREATE TABLE IF NOT EXISTS image_tags (
   image_id UUID REFERENCES images(id) ON DELETE CASCADE,
   tag_id UUID REFERENCES tags(id) ON DELETE CASCADE,
   PRIMARY KEY (image_id, tag_id)
 );
-
-Wichtige ENV‑Variablen (Beispiel / `.env.example`)
-------------------------------------------------
-- DATABASE_URL=postgres://user:pass@host:port/dbname
-- MINIO_ENDPOINT=https://minio.example.com
-- MINIO_BUCKET=bz-bilder
-- MINIO_ACCESS_KEY=...
-- MINIO_SECRET_KEY=...
-- MINIO_REGION=us-east-1
-- NEXTAUTH_URL=https://your-app.example.com
-- NEXTAUTH_SECRET=...
-- NEXT_PUBLIC_APP_NAME=BZ Bilder Collector
-- NEXT_PUBLIC_MINIO_BUCKET=bz-bilder
-
-Hinweise zu Presigned Upload Flow
----------------------------------
-1. Client (browser) sendet Metadaten / Dateiinfo an `app/api/upload/route.ts` (auth vorausgesetzt).
-2. Server erzeugt einen presigned PUT URL (MinIO/S3) und gibt URL + objectKey zurück.
-3. Client lädt die Datei direkt an MinIO (PUT) — reduziert Server‑Traffic.
-4. Nach Erfolg ruft Client eine weitere API (z. B. `app/api/images`) zum Persistieren der Metadaten auf (key, filename, size, mime, tags).
-
-Implementierungs‑Tipps
-----------------------
-- Verwende `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` oder `minio` client, um presigned URLs zu erzeugen.
-- Validiere Dateityp und -größe serverseitig in der Upload‑Route (limitieren, checken des MIME‑Typs).
-- MinIO auf Railway benötigt ein dazugehöriges Volume; setze `MINIO_BUCKET` und Zugangsvariablen in Railway.
-- Verwende `next-pwa` für Service Worker + runtime caching. Konfiguriere Workbox für Bilder (StaleWhileRevalidate) und UI‑Assets (CacheFirst mit Versionierung).
-- Auth mit `next-auth` (Auth.js): E‑Mail / OAuth Provider; protecte Upload/Write‑Routen.
-
-PWA / Offline
--------------
-- Manifest: `name`, `short_name`, `icons`, `start_url`, `display: fullscreen`.
-- Service Worker: Cache UI (build assets) + Runtime cache für bereits geladene Bilder.
-- Offline: Zeige gecachte Bildkacheln; blockiere Uploads offline oder queue sie für später (optional).
-
-Railway Deployment Hinweise
----------------------------
-- Add Postgres als Railway Add‑on; setze `DATABASE_URL` automatisch.
-- MinIO: entweder Railway Marketplace oder Docker Container mit attached volume. Setze `MINIO_*` ENV vars in Railway.
-- Build: Next.js wird auf Railway als Node.js App gebaut. Stelle sicher, dass die `NEXTAUTH_URL` auf die produzierte URL zeigt.
-
-Development (lokal)
--------------------
-Voraussetzung: Node >= 18 empfohlen
-
-PowerShell Beispiel:
-```powershell
-npm install
-cp .env.example .env
-# .env ausfüllen
-npm run dev
 ```
 
-Deployment
-----------
-- `npm run build` → `npm run start` (in Railway konfigurieren)
-- Setze alle ENV Variablen auf Railway und richte MinIO‑Volume ein.
+## Architekturüberblick
 
-Sicherheit & Skalierung
------------------------
-- Presigned URLs haben kurze TTL (z. B. 5–15 Minuten).
-- Limit Upload‑Größe und erlaubte MIME‑Typen.
-- Rechte: nur authentifizierte Nutzer dürfen Uploads / Metadaten anlegen.
-- Optional: Bildverarbeitung (Thumbs, WebP) via Background Job / Serverless Function.
+- `src/app/page.tsx` – Server Component, lädt Bilder + Tags und übergibt sie an den Client.
+- `src/components/gallery/*` – Client-Komponenten für Upload, Grid, Detail-Dialog und Tagfilter.
+- `src/app/api/*` – REST-Endpoints für Upload (Presigned URL), Metadaten, Reordering und Tagliste.
+- `src/lib/db.ts` – Postgres Utility mit Connection Pool und Helferfunktionen.
+- `src/lib/storage.ts` – MinIO/S3 Presigned Post Helper.
+- `src/lib/auth.ts` – Auth.js Konfiguration (GitHub + E-Mail Provider).
+- `public/manifest.json` & `next.config.mjs` – PWA Konfiguration (Workbox Caching). 
 
-Optionale Erweiterungen (nach MVP)
-----------------------------------
-- EXIF‑Metadaten auslesen und anzeigen
-- Autosuggest / Tag‑Recommendation (asynchron, ML oder heuristisch)
-- Batch‑Operations: Bulk‑Tagging, Bulk‑Delete
-- Image transforms (crop, rotate, thumbnails) auf Upload oder on‑the‑fly
+## Deployment auf Railway
 
-Contributing
-------------
-- Issues / PRs willkommen. Beschreibe bitte Bug, Repro‑Schritte und gewünschtes Verhalten.
+1. **Services bereitstellen:**
+   - Node.js Service für Next.js App.
+   - Railway Postgres Add-on; `DATABASE_URL` wird automatisch gesetzt.
+   - Separater MinIO-Service (Docker/Marketplace) mit persistentem Volume.
+2. **Environment Variablen** für App, Postgres und MinIO hinterlegen (siehe oben).
+3. **Build & Start Commands:**
+   - Build: `npm run build`
+   - Start: `npm run start`
+4. **Domains & Auth:** `NEXTAUTH_URL` auf die Railway-Domain setzen. Für GitHub-Login OAuth-App konfigurieren.
 
-License
--------
-MIT — siehe `LICENSE` (falls gewünscht).
+## Weitere Ideen
 
-Kontakt
--------
-Fragen / Wünsche bitte per Issue im Repository stellen.
+- EXIF-Parsing und Anzeige ergänzen.
+- Automatische Tag-Vorschläge (z. B. ML-Modelle, Vision APIs).
+- Hintergrundjobs für Thumbnails/WebP-Konvertierung.
+- Offline-Warteschlange für Uploads in Service Worker integrieren.
+
+## Lizenz
+
+MIT (optional anpassbar). Beiträge sind willkommen!
