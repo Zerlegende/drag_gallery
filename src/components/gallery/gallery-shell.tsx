@@ -20,20 +20,23 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useMutation } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Trash2, Grid3x3, Grid2x2, LayoutGrid } from "lucide-react";
 
 import { GalleryGrid } from "@/components/gallery/gallery-grid";
 import { TagFilter, type ImageSize } from "@/components/gallery/tag-filter";
+import type { SortOption } from "@/components/gallery/tag-filter";
 import { ImageDetailDialog } from "@/components/gallery/image-detail-dialog";
 import { ContainerPanel } from "@/components/gallery/container-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ImageWithTags, TagRecord } from "@/lib/db";
 import { formatFileSize } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useSidebar } from "@/components/sidebar-context";
-import { getImageSize, saveImageSize, getImagesPerPage, saveImagesPerPage } from "@/lib/user-preferences";
+import { getImageSize, saveImageSize, getImagesPerPage, saveImagesPerPage, getSortOption, saveSortOption } from "@/lib/user-preferences";
 
 export type GalleryShellProps = {
   initialImages: ImageWithTags[];
@@ -58,6 +61,8 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [imagesPerPage, setImagesPerPageState] = useState(50); // Default für SSR
+  const [sortOption, setSortOption] = useState<SortOption>("none"); // Default für SSR
+  const [isMounted, setIsMounted] = useState(false); // Track client-side mounting
   const draggedImagesRef = useRef<string[]>([]);
   
   // Physics state for drag animation
@@ -65,10 +70,16 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const lastDragPos = useRef({ x: 0, y: 0, time: 0 });
   const velocityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Track client-side mounting für DndContext
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Lade imageSize aus Cookie nach Hydration
   useEffect(() => {
     setImageSize(getImageSize());
     setImagesPerPageState(getImagesPerPage());
+    setSortOption(getSortOption());
   }, []);
 
   // Wrapper-Funktion für imagesPerPage die auch in Cookie speichert
@@ -78,10 +89,22 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     setCurrentPage(1); // Zurück zur ersten Seite bei Änderung
   };
 
-  // Speichere imageSize im Cookie, wenn sie sich ändert
-  useEffect(() => {
-    saveImageSize(imageSize);
-  }, [imageSize]);
+  // Wrapper-Funktion für imageSize die auch in Cookie speichert
+  const handleImageSizeChange = (size: ImageSize) => {
+    setImageSize(size);
+    saveImageSize(size);
+  };
+
+  // Wrapper-Funktion für sortOption die auch in Cookie speichert
+  const handleSortChange = (sort: SortOption) => {
+    setSortOption(sort);
+    saveSortOption(sort);
+  };
+
+  // Wrapper-Funktion für imagesPerPage aus Select (nimmt String entgegen)
+  const handleImagesPerPageChange = (value: string) => {
+    setImagesPerPage(Number(value));
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -137,14 +160,42 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     });
   }, [filterTags, images, searchTerm]);
 
+  // Sortiere die gefilterten Bilder
+  const sortedImages = useMemo(() => {
+    const sorted = [...filteredImages];
+    
+    switch (sortOption) {
+      case "none":
+        return sorted; // Keine Sortierung - Originale Reihenfolge
+      case "date-desc":
+        return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      case "date-asc":
+        return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      case "name-asc":
+        return sorted.sort((a, b) => {
+          const nameA = a.imagename || a.filename;
+          const nameB = b.imagename || b.filename;
+          return nameA.localeCompare(nameB);
+        });
+      case "name-desc":
+        return sorted.sort((a, b) => {
+          const nameA = a.imagename || a.filename;
+          const nameB = b.imagename || b.filename;
+          return nameB.localeCompare(nameA);
+        });
+      default:
+        return sorted;
+    }
+  }, [filteredImages, sortOption]);
+
   // Berechne sichtbare Bilder basierend auf aktueller Seite
   const visibleImages = useMemo(() => {
     const startIndex = (currentPage - 1) * imagesPerPage;
     const endIndex = startIndex + imagesPerPage;
-    return filteredImages.slice(startIndex, endIndex);
-  }, [filteredImages, currentPage, imagesPerPage]);
+    return sortedImages.slice(startIndex, endIndex);
+  }, [sortedImages, currentPage, imagesPerPage]);
 
-  const totalPages = Math.ceil(filteredImages.length / imagesPerPage);
+  const totalPages = Math.ceil(sortedImages.length / imagesPerPage);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -276,19 +327,37 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const bulkDeleteMutation = useMutation({
     mutationFn: async (imageIds: string[]) => {
       const results = await Promise.allSettled(
-        imageIds.map((id) =>
-          fetch(`/api/images/${id}`, { method: "DELETE" })
-        )
+        imageIds.map(async (id) => {
+          const response = await fetch(`/api/images/${id}`, { method: "DELETE" });
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || `Failed to delete image ${id}`);
+          }
+          return id;
+        })
       );
+      
       const failed = results.filter((r) => r.status === "rejected");
+      const succeeded = results
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+        .map((r) => r.value);
+      
       if (failed.length > 0) {
-        throw new Error(`${failed.length} Bild(er) konnten nicht gelöscht werden`);
+        if (succeeded.length === 0) {
+          // Alle fehlgeschlagen
+          throw new Error(`Fehler beim Löschen: ${(failed[0] as PromiseRejectedResult).reason.message}`);
+        } else {
+          // Teilweise fehlgeschlagen
+          throw new Error(`${failed.length} von ${imageIds.length} Bild(er) konnten nicht gelöscht werden`);
+        }
       }
+      
+      return succeeded;
     },
-    onSuccess: (_, imageIds) => {
-      setImages((prev) => prev.filter((item) => !imageIds.includes(item.id)));
+    onSuccess: (succeededIds) => {
+      setImages((prev) => prev.filter((item) => !succeededIds.includes(item.id)));
       setSelectedImageIds(new Set());
-      showToast("success", `${imageIds.length} Bild(er) wurden gelöscht.`, 3000);
+      showToast("success", `${succeededIds.length} Bild(er) wurden gelöscht.`, 3000);
     },
     onError: (error: Error) => showToast("error", error.message),
   });
@@ -318,7 +387,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   };
 
   const selectAllImages = () => {
-    setSelectedImageIds(new Set(filteredImages.map((img) => img.id)));
+    setSelectedImageIds(new Set(sortedImages.map((img) => img.id)));
   };
 
   const deselectAllImages = () => {
@@ -424,6 +493,200 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     }
   };
 
+  // Render gallery without DnD during SSR
+  if (!isMounted) {
+    return (
+      <>
+        <ContainerPanel
+          tags={availableTags}
+          images={images}
+          onRemoveImageFromTag={handleRemoveImageFromTag}
+          containerMode={true}
+          onTagCreated={handleTagCreated}
+          onTagDeleted={handleTagDeleted}
+        />
+      
+      {selectedImageIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4 shadow-2xl min-w-[300px]">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium">
+              {selectedImageIds.size} Bild(er) ausgewählt
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={deselectAllImages}
+            >
+              Auswahl aufheben
+            </Button>
+          </div>
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleteMutation.isPending}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mt-8">
+        <div className="space-y-4 w-full">
+          <div className="flex items-center justify-between gap-2">
+            <TagFilter
+              tags={availableTags}
+              activeTagIds={filterTags}
+              onToggle={(tagId) =>
+                setFilterTags((prev) =>
+                  prev.includes(tagId)
+                    ? prev.filter((id) => id !== tagId)
+                    : [...prev, tagId]
+                )
+              }
+              onSearchChange={setSearchTerm}
+              imageSize={imageSize}
+              onImageSizeChange={handleImageSizeChange}
+              imagesPerPage={imagesPerPage}
+              onImagesPerPageChange={setImagesPerPage}
+              sortOption={sortOption}
+              onSortChange={handleSortChange}
+            />
+            {filterTags.length > 0 && (
+              <Button
+                onClick={() => setFilterTags([])}
+                variant="ghost"
+                size="sm"
+              >
+                Alle zurücksetzen
+              </Button>
+            )}
+          </div>
+
+          {filterTags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Aktive Filter:</span>
+              {filterTags.map((tagId) => {
+                const tag = availableTags.find((t) => t.id === tagId);
+                if (!tag) return null;
+                return (
+                  <Badge
+                    key={tagId}
+                    variant="secondary"
+                    className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => setFilterTags((prev) => prev.filter((id) => id !== tagId))}
+                  >
+                    {tag.name} ×
+                  </Badge>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <GalleryGrid
+        images={visibleImages}
+        imageSize={imageSize}
+        selectedImageIds={selectedImageIds}
+        onImageClick={setSelectedImage}
+        onSelectImage={toggleImageSelection}
+      />
+
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-8">
+          <Button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            size="sm"
+            variant="outline"
+          >
+            Erste
+          </Button>
+          <Button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            size="sm"
+            variant="outline"
+          >
+            Zurück
+          </Button>
+          
+          <div className="flex items-center gap-2">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              
+              return (
+                <Button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  size="sm"
+                  variant={currentPage === pageNum ? "default" : "outline"}
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
+          </div>
+
+          <Button
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+            size="sm"
+            variant="outline"
+          >
+            Weiter
+          </Button>
+          <Button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            size="sm"
+            variant="outline"
+          >
+            Letzte
+          </Button>
+          
+          <span className="ml-4 text-sm text-muted-foreground">
+            Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)
+          </span>
+        </div>
+      )}
+
+      <ImageDetailDialog
+        image={selectedImage}
+        onOpenChange={(open) => {
+          if (!open) setSelectedImage(null);
+        }}
+        onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+      />
+
+      <ConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        title="Bilder löschen"
+        description={`Möchtest du wirklich ${selectedImageIds.size} Bild(er) löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmText="Löschen"
+        cancelText="Abbrechen"
+        variant="destructive"
+        onConfirm={confirmBulkDelete}
+      />
+      </>
+    );
+  }
+
+  // Render gallery with DnD after mounting on client
   return (
     <DndContext 
       sensors={sensors} 
@@ -483,11 +746,13 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               }
               onSearchChange={setSearchTerm}
               imageSize={imageSize}
-              onImageSizeChange={setImageSize}
+              onImageSizeChange={handleImageSizeChange}
               imagesPerPage={imagesPerPage}
               onImagesPerPageChange={setImagesPerPage}
+              sortOption={sortOption}
+              onSortChange={handleSortChange}
             />
-            {isAdmin && filteredImages.length > 0 && (
+            {isAdmin && sortedImages.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -607,7 +872,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             </Button>
             
             <span className="ml-4 text-sm text-muted-foreground">
-              Seite {currentPage} von {totalPages} ({filteredImages.length} Bilder)
+              Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)
             </span>
           </div>
         )}

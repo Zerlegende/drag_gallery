@@ -55,6 +55,7 @@ const nextConfig = pwa({
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    qualities: [50, 75, 90], // Explizit erlaubte Quality-Werte
     minimumCacheTTL: 60 * 60 * 24 * 7, // 7 Tage Cache
     dangerouslyAllowSVG: false,
     contentDispositionType: 'inline',

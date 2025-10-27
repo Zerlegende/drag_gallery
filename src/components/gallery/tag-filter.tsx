@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Grid2x2, Grid3x3, LayoutGrid } from "lucide-react";
+import { Search, Grid2x2, Grid3x3, LayoutGrid, ArrowUpDown } from "lucide-react";
 
 import type { TagRecord } from "@/lib/db";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/tooltip";
 
 export type ImageSize = "small" | "medium" | "large";
+export type SortOption = "none" | "date-desc" | "date-asc" | "name-asc" | "name-desc";
 
 export type TagFilterProps = {
   tags: TagRecord[];
@@ -25,6 +26,8 @@ export type TagFilterProps = {
   onImageSizeChange?: (size: ImageSize) => void;
   imagesPerPage?: number;
   onImagesPerPageChange?: (count: number) => void;
+  sortOption?: SortOption;
+  onSortChange?: (sort: SortOption) => void;
 };
 
 export function TagFilter({ 
@@ -36,6 +39,8 @@ export function TagFilter({
   onImageSizeChange,
   imagesPerPage = 50,
   onImagesPerPageChange,
+  sortOption = "date-desc",
+  onSortChange,
 }: TagFilterProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -125,6 +130,28 @@ export function TagFilter({
               </TooltipTrigger>
               <TooltipContent>
                 <p>Anzahl Bilder pro Seite</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        {onSortChange && (
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <select
+                  value={sortOption}
+                  onChange={(e) => onSortChange(e.target.value as SortOption)}
+                  className="h-9 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="none">Keine Sortierung</option>
+                  <option value="date-desc">📅 Neueste zuerst</option>
+                  <option value="date-asc">📅 Älteste zuerst</option>
+                  <option value="name-asc">🔤 A → Z</option>
+                  <option value="name-desc">🔤 Z → A</option>
+                </select>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Sortierung</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

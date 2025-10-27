@@ -4,6 +4,7 @@
  */
 
 export type ImageSize = "small" | "medium" | "large";
+export type SortOption = "none" | "date-desc" | "date-asc" | "name-asc" | "name-desc";
 
 export type UserPreferences = {
   imageSize: ImageSize;
@@ -11,6 +12,7 @@ export type UserPreferences = {
   leftSidebarCollapsed: boolean;
   rightSidebarOpen: boolean;
   imagesPerPage: number;
+  sortOption: SortOption;
 };
 
 const COOKIE_NAME = "user-preferences";
@@ -110,6 +112,7 @@ export function getLeftSidebarCollapsed(): boolean {
  * Speichert den Zustand der rechten Sidebar (Container Panel)
  */
 export function saveRightSidebarOpen(open: boolean) {
+  console.log('[user-preferences] Saving rightSidebarOpen:', open);
   saveUserPreferences({ rightSidebarOpen: open });
 }
 
@@ -118,7 +121,9 @@ export function saveRightSidebarOpen(open: boolean) {
  */
 export function getRightSidebarOpen(): boolean {
   const prefs = getUserPreferences();
-  return prefs.rightSidebarOpen ?? false; // Default: geschlossen
+  const value = prefs.rightSidebarOpen ?? false; // Default: geschlossen
+  console.log('[user-preferences] Getting rightSidebarOpen:', value, 'from prefs:', prefs);
+  return value;
 }
 
 /**
@@ -134,4 +139,19 @@ export function saveImagesPerPage(count: number) {
 export function getImagesPerPage(): number {
   const prefs = getUserPreferences();
   return prefs.imagesPerPage ?? 50; // Default: 50 Bilder pro Seite
+}
+
+/**
+ * Speichert die Sortier-Option
+ */
+export function saveSortOption(sort: SortOption) {
+  saveUserPreferences({ sortOption: sort });
+}
+
+/**
+ * Lädt die Sortier-Option
+ */
+export function getSortOption(): SortOption {
+  const prefs = getUserPreferences();
+  return prefs.sortOption ?? "none"; // Default: keine Sortierung
 }

@@ -41,27 +41,49 @@ export function ContainerPanel({
   onTagCreated,
   onTagDeleted,
 }: ContainerPanelProps) {
-  const { rightSidebarOpen, setRightSidebarOpen } = useSidebar();
+  const { rightSidebarOpen: contextOpen, setRightSidebarOpen: setContextOpen } = useSidebar();
   const { showToast } = useToast();
   const { data: session } = useSession();
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tagToDelete, setTagToDelete] = useState<{ id: string; name: string } | null>(null);
-  const [expandedTags, setExpandedTags] = useState<Record<string, boolean>>(() => {
-    // Lade gespeicherte Zustände aus Cookie
-    return getExpandedTags(tags.map(t => t.id));
-  });
+  const [expandedTags, setExpandedTags] = useState<Record<string, boolean>>({}); // Start leer für SSR
+  const [isHydrated, setIsHydrated] = useState(false); // Track hydration status
+  const [isMounted, setIsMounted] = useState(false); // Track wenn Component mounted ist
+  
+  // Warte bis Component mounted ist, dann verwende Context-Wert
+  const localOpen = isMounted ? contextOpen : false;
+  
+  // Wrapper für setRightSidebarOpen
+  const setRightSidebarOpen = (open: boolean) => {
+    setContextOpen(open);
+  };
 
   const isAdmin = (session?.user as any)?.role === "admin";
 
-  // Speichere Tag-Zustände im Cookie, wenn sie sich ändern
+  // Track wenn Component mounted ist
   useEffect(() => {
-    saveExpandedTags(expandedTags);
-  }, [expandedTags]);
+    setIsMounted(true);
+  }, []);
 
-  // Aktualisiere expandedTags, wenn neue Tags hinzukommen
+  // Lade Tag-Zustände aus Cookie nach Hydration
   useEffect(() => {
+    setExpandedTags(getExpandedTags(tags.map(t => t.id)));
+    setIsHydrated(true);
+  }, []); // Nur beim Mount
+
+  // Speichere Tag-Zustände im Cookie, wenn sie sich ändern (aber nur nach Hydration)
+  useEffect(() => {
+    if (isHydrated) {
+      saveExpandedTags(expandedTags);
+    }
+  }, [expandedTags, isHydrated]);
+
+  // Aktualisiere expandedTags, wenn neue Tags hinzukommen (nur nach Hydration)
+  useEffect(() => {
+    if (!isHydrated) return; // Warte bis Hydration abgeschlossen ist
+    
     const currentTagIds = tags.map(t => t.id);
     const savedStates = getExpandedTags(currentTagIds);
     
@@ -71,7 +93,7 @@ export function ContainerPanel({
     if (hasNewTags) {
       setExpandedTags(savedStates);
     }
-  }, [tags]);
+  }, [tags, isHydrated]);
 
   const toggleAllTags = () => {
     const allExpanded = Object.values(expandedTags).every(v => v);
@@ -140,7 +162,7 @@ export function ContainerPanel({
     <aside 
       className={cn(
         "fixed top-0 right-0 h-screen bg-background border-l border-border shadow-lg transition-all duration-300 z-30 flex flex-col",
-        rightSidebarOpen ? "w-80" : "w-16"
+        localOpen ? "w-80" : "w-16"
       )}
     >
       {/* Toggle Button */}
@@ -148,17 +170,17 @@ export function ContainerPanel({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+          onClick={() => setRightSidebarOpen(!localOpen)}
           className="h-8 w-8 p-0"
         >
-          {rightSidebarOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {localOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
       </div>
 
       {/* Panel Content */}
       <div className={cn(
         "flex flex-col flex-1 overflow-hidden",
-        !rightSidebarOpen && "hidden"
+        !localOpen && "hidden"
       )}>
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-2">

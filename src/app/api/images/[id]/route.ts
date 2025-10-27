@@ -74,16 +74,23 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  // Nur Admins dürfen löschen
-  if (session.user.role !== "admin") {
-    return new NextResponse("Forbidden", { status: 403 });
-  }
-
   const { id } = await params; // Await params
 
   const image = await getImageById(id);
   if (!image) {
     return new NextResponse("Not Found", { status: 404 });
+  }
+
+  // Prüfe Lösch-Berechtigung
+  const isAdmin = session.user.role === "admin";
+  const isOwner = image.uploaded_by === session.user.id;
+  const uploadTime = new Date(image.created_at).getTime();
+  const now = Date.now();
+  const oneHourInMs = 60 * 60 * 1000; // 1 Stunde in Millisekunden
+  const canDeleteAsOwner = isOwner && (now - uploadTime) <= oneHourInMs;
+
+  if (!isAdmin && !canDeleteAsOwner) {
+    return new NextResponse("Forbidden: You can only delete your own images within 1 hour of upload", { status: 403 });
   }
 
   // Lösche aus MinIO
