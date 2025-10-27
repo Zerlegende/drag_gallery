@@ -71,6 +71,7 @@ export function ContainerPanel({
   useEffect(() => {
     setExpandedTags(getExpandedTags(tags.map(t => t.id)));
     setIsHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Nur beim Mount
 
   // Speichere Tag-Zustände im Cookie, wenn sie sich ändern (aber nur nach Hydration)
@@ -93,7 +94,7 @@ export function ContainerPanel({
     if (hasNewTags) {
       setExpandedTags(savedStates);
     }
-  }, [tags, isHydrated]);
+  }, [tags, isHydrated, expandedTags]);
 
   const toggleAllTags = () => {
     const allExpanded = Object.values(expandedTags).every(v => v);

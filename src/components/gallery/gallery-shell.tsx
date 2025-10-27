@@ -590,10 +590,14 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
 
       <GalleryGrid
         images={visibleImages}
-        imageSize={imageSize}
+        onSelectImage={setSelectedImage}
+        isReordering={false}
+        isAdmin={isAdmin}
         selectedImageIds={selectedImageIds}
-        onImageClick={setSelectedImage}
-        onSelectImage={toggleImageSelection}
+        onToggleSelection={toggleImageSelection}
+        containerMode={true}
+        activeId={null}
+        imageSize={imageSize}
       />
 
       {totalPages > 1 && (
