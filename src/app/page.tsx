@@ -7,8 +7,9 @@ import { GalleryShell } from "@/components/gallery/gallery-shell";
 import { UploadButton } from "@/components/gallery/upload-button";
 import { GalleryPageClient } from "@/components/gallery/gallery-page-client";
 
-async function GalleryLoader({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
-  const tagFilter = searchParams.tag;
+async function GalleryLoader({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  const tagFilter = params.tag;
   const filterTags = Array.isArray(tagFilter)
     ? tagFilter
     : tagFilter
@@ -23,7 +24,7 @@ async function GalleryLoader({ searchParams }: { searchParams: Record<string, st
   return <GalleryShell initialImages={images} allTags={tags} initialFilter={filterTags} />;
 }
 
-export default async function Home({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Home({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // Auth Check - redirect zu Login wenn nicht eingeloggt
   const session = await auth();
   if (!session?.user) {
