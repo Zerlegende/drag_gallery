@@ -148,89 +148,112 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
 
       // 2. Upload der neuen Bilder
       let successCount = 0;
+      let failedCount = 0;
+      const failedFiles: string[] = [];
+      
       for (const item of filesToUpload) {
-        console.log('Uploading:', item.file.name);
-        
-        // 1. Hole presigned URL
-        const uploadResponse = await fetch("/api/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: item.file.name,
-            mime: item.file.type,
-            size: item.file.size,
-          }),
-        });
+        try {
+          console.log('Uploading:', item.file.name);
+          
+          // 1. Hole presigned URL
+          const uploadResponse = await fetch("/api/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: item.file.name,
+              mime: item.file.type,
+              size: item.file.size,
+            }),
+          });
 
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.text();
-          console.error('Presigned URL Error:', errorData);
-          throw new Error(`Presigned URL konnte nicht erstellt werden: ${item.file.name}`);
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.text();
+            console.error('Presigned URL Error:', errorData);
+            throw new Error(`Presigned URL konnte nicht erstellt werden`);
+          }
+
+          const { url, fields, objectKey } = await uploadResponse.json();
+          console.log('Got presigned URL:', url);
+          console.log('Fields:', fields);
+          console.log('ObjectKey:', objectKey);
+
+          // 2. Upload zu MinIO
+          const formData = new FormData();
+          Object.entries(fields).forEach(([key, value]) => {
+            formData.append(key, value as string);
+          });
+          formData.append("file", item.file);
+
+          console.log('Uploading to MinIO...');
+          const minioResponse = await fetch(url, {
+            method: "POST",
+            body: formData,
+          });
+
+          console.log('MinIO Response Status:', minioResponse.status);
+          if (!minioResponse.ok) {
+            const errorText = await minioResponse.text();
+            console.error('MinIO Error:', errorText);
+            throw new Error(`Upload zu MinIO fehlgeschlagen (${minioResponse.status})`);
+          }
+
+          console.log('MinIO upload successful!');
+
+          // 3. Speichere Metadaten in DB
+          const metadataResponse = await fetch("/api/images", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: item.file.name,
+              key: objectKey,
+              mime: item.file.type,
+              size: item.file.size,
+              tags: [],
+            }),
+          });
+
+          if (!metadataResponse.ok) {
+            const errorData = await metadataResponse.text();
+            console.error('Metadata Error:', errorData);
+            throw new Error(`Metadaten konnten nicht gespeichert werden`);
+          }
+          
+          console.log('Metadata saved successfully!');
+          successCount++;
+        } catch (fileError) {
+          // Fehler für dieses Bild loggen, aber weitermachen
+          console.error(`Fehler beim Upload von ${item.file.name}:`, fileError);
+          failedCount++;
+          failedFiles.push(item.file.name);
         }
-
-        const { url, fields, objectKey } = await uploadResponse.json();
-        console.log('Got presigned URL:', url);
-        console.log('Fields:', fields);
-        console.log('ObjectKey:', objectKey);
-
-        // 2. Upload zu MinIO
-        const formData = new FormData();
-        Object.entries(fields).forEach(([key, value]) => {
-          formData.append(key, value as string);
-        });
-        formData.append("file", item.file);
-
-        console.log('Uploading to MinIO...');
-        const minioResponse = await fetch(url, {
-          method: "POST",
-          body: formData,
-        });
-
-        console.log('MinIO Response Status:', minioResponse.status);
-        if (!minioResponse.ok) {
-          const errorText = await minioResponse.text();
-          console.error('MinIO Error:', errorText);
-          throw new Error(`Upload zu MinIO fehlgeschlagen (${minioResponse.status}): ${item.file.name}`);
-        }
-
-        console.log('MinIO upload successful!');
-
-        // 3. Speichere Metadaten in DB
-        const metadataResponse = await fetch("/api/images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: item.file.name,
-            key: objectKey,
-            mime: item.file.type,
-            size: item.file.size,
-            tags: [],
-          }),
-        });
-
-        if (!metadataResponse.ok) {
-          const errorData = await metadataResponse.text();
-          console.error('Metadata Error:', errorData);
-          throw new Error(`Metadaten konnten nicht gespeichert werden: ${item.file.name}`);
-        }
-        
-        console.log('Metadata saved successfully!');
-        successCount++;
       }
 
       // Cleanup und Success
       queuedFiles.forEach((item) => URL.revokeObjectURL(item.preview));
       setQueuedFiles([]);
       
-      // Zeige Success-Nachricht
-      if (successCount > 0) {
+      // Zeige Ergebnis-Nachricht
+      if (successCount > 0 && failedCount === 0) {
         showToast("success", `${successCount} Bild(er) erfolgreich hochgeladen.`, 3000);
+      } else if (successCount > 0 && failedCount > 0) {
+        showToast(
+          "warning", 
+          `${successCount} Bild(er) hochgeladen, ${failedCount} übersprungen (${failedFiles.join(', ')}).`, 
+          7000
+        );
+      } else if (failedCount > 0) {
+        showToast(
+          "error", 
+          `Alle ${failedCount} Bilder konnten nicht hochgeladen werden.`, 
+          7000
+        );
       }
       
-      // Rufe die Success-Callback auf
+      // Rufe die Success-Callback auf (auch wenn nicht alle erfolgreich waren)
       await onUpload([]);
     } catch (uploadError) {
-      console.error('Upload Error:', uploadError);
+      // Nur kritische Fehler die den ganzen Prozess stoppen
+      console.error('Critical Upload Error:', uploadError);
       const errorMessage = uploadError instanceof Error ? uploadError.message : "Upload fehlgeschlagen.";
       setError(errorMessage);
       showToast("error", errorMessage, 7000);
