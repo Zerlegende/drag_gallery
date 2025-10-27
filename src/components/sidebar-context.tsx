@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { getLeftSidebarCollapsed, getRightSidebarOpen, saveLeftSidebarCollapsed, saveRightSidebarOpen } from "@/lib/user-preferences";
 
 type SidebarContextType = {
   leftSidebarCollapsed: boolean;
@@ -12,8 +13,28 @@ type SidebarContextType = {
 const SidebarContext = createContext<SidebarContextType | null>(null);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  // Start mit Default-Werten (Server-Rendering)
+  const [leftSidebarCollapsed, setLeftSidebarCollapsedState] = useState(false);
+  const [rightSidebarOpen, setRightSidebarOpenState] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Nach Hydration: Lade Cookie-Werte
+  useEffect(() => {
+    setLeftSidebarCollapsedState(getLeftSidebarCollapsed());
+    setRightSidebarOpenState(getRightSidebarOpen());
+    setIsHydrated(true);
+  }, []);
+
+  // Wrapper-Funktionen, die auch in Cookies speichern
+  const setLeftSidebarCollapsed = (collapsed: boolean) => {
+    setLeftSidebarCollapsedState(collapsed);
+    saveLeftSidebarCollapsed(collapsed);
+  };
+
+  const setRightSidebarOpen = (open: boolean) => {
+    setRightSidebarOpenState(open);
+    saveRightSidebarOpen(open);
+  };
 
   return (
     <SidebarContext.Provider

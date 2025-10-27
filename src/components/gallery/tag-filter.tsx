@@ -23,6 +23,8 @@ export type TagFilterProps = {
   onSearchChange: (term: string) => void;
   imageSize?: ImageSize;
   onImageSizeChange?: (size: ImageSize) => void;
+  imagesPerPage?: number;
+  onImagesPerPageChange?: (count: number) => void;
 };
 
 export function TagFilter({ 
@@ -32,6 +34,8 @@ export function TagFilter({
   onSearchChange,
   imageSize = "medium",
   onImageSizeChange,
+  imagesPerPage = 50,
+  onImagesPerPageChange,
 }: TagFilterProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -102,6 +106,27 @@ export function TagFilter({
                 </TooltipContent>
               </Tooltip>
             </div>
+          </TooltipProvider>
+        )}
+        {onImagesPerPageChange && (
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <select
+                  value={imagesPerPage}
+                  onChange={(e) => onImagesPerPageChange(Number(e.target.value))}
+                  className="h-9 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value={10}>10 Bilder</option>
+                  <option value={25}>25 Bilder</option>
+                  <option value={50}>50 Bilder</option>
+                  <option value={100}>100 Bilder</option>
+                </select>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Anzahl Bilder pro Seite</p>
+              </TooltipContent>
+            </Tooltip>
           </TooltipProvider>
         )}
       </div>

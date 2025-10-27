@@ -119,15 +119,14 @@ function SortableImageCard({
 }: SortableImageCardProps) {
   const { listeners, setNodeRef, transform, transition, attributes, isDragging } = useSortable({
     id: image.id,
-    transition: {
-      duration: 350,
-      easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-    },
+    // Keine Transition - Bilder bewegen sich nicht mehr automatisch
+    transition: null,
   });
 
   // Track click position to detect if it was a drag or click
   const [mouseDownPos, setMouseDownPos] = useState<{ x: number; y: number } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   // Prüfe ob Bild innerhalb der letzten Stunde hochgeladen wurde
   const canDeleteImage = () => {
@@ -172,31 +171,10 @@ function SortableImageCard({
     }
   };
 
-  // Berechne Neigung basierend auf Position
-  const getTiltStyle = () => {
-    if (!transform) return {};
-    
-    const { x, y } = transform;
-    
-    // Simple tilt basierend auf Position
-    const tiltX = y / 20;
-    const tiltY = -x / 20;
-    
-    return {
-      transform: isDragging
-        ? `translate3d(${x}px, ${y}px, 0) scale(0.55) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`
-        : CSS.Transform.toString(transform),
-      transition: isDragging 
-        ? 'none'
-        : transition || 'transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-    };
-  };
-
+  // Keine Transformation mehr - Bild bleibt an ursprünglicher Position
   const style = {
-    ...getTiltStyle(),
     opacity: (isDragging || isBeingDragged) ? 0.3 : 1,
     zIndex: isDragging ? 9999 : 'auto',
-    willChange: isDragging ? 'transform' : 'auto',
   };
 
   const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
@@ -234,12 +212,28 @@ function SortableImageCard({
         )}
 
         <div className="relative aspect-[4/3] overflow-hidden">
+          {/* Skeleton Loader */}
+          {!imageLoaded && (
+            <div className="absolute inset-0 bg-muted animate-pulse">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+            </div>
+          )}
+          
           <Image
             src={imageUrl}
             alt={image.filename}
             fill
             draggable={false}
-            className="object-cover transition-transform duration-300 group-hover:scale-105 select-none pointer-events-none"
+            className={cn(
+              "object-cover transition-all duration-300 select-none pointer-events-none",
+              imageLoaded ? "opacity-100 group-hover:scale-105" : "opacity-0"
+            )}
+            sizes="(max-width: 640px) 150px, (max-width: 768px) 200px, (max-width: 1024px) 250px, 300px"
+            quality={50}
+            loading="lazy"
+            placeholder="blur"
+            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+            onLoad={() => setImageLoaded(true)}
           />
           {isReordering ? (
             <div className="absolute inset-0 bg-black/20" />

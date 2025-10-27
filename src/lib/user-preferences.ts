@@ -8,6 +8,9 @@ export type ImageSize = "small" | "medium" | "large";
 export type UserPreferences = {
   imageSize: ImageSize;
   expandedTags: Record<string, boolean>;
+  leftSidebarCollapsed: boolean;
+  rightSidebarOpen: boolean;
+  imagesPerPage: number;
 };
 
 const COOKIE_NAME = "user-preferences";
@@ -86,4 +89,49 @@ export function getExpandedTags(allTagIds: string[]): Record<string, boolean> {
 
   // Fallback: Alle Tags aufgeklappt
   return allTagIds.reduce((acc, tagId) => ({ ...acc, [tagId]: true }), {});
+}
+
+/**
+ * Speichert den Zustand der linken Sidebar (Navbar)
+ */
+export function saveLeftSidebarCollapsed(collapsed: boolean) {
+  saveUserPreferences({ leftSidebarCollapsed: collapsed });
+}
+
+/**
+ * Lädt den Zustand der linken Sidebar (Navbar)
+ */
+export function getLeftSidebarCollapsed(): boolean {
+  const prefs = getUserPreferences();
+  return prefs.leftSidebarCollapsed ?? false; // Default: nicht eingeklappt
+}
+
+/**
+ * Speichert den Zustand der rechten Sidebar (Container Panel)
+ */
+export function saveRightSidebarOpen(open: boolean) {
+  saveUserPreferences({ rightSidebarOpen: open });
+}
+
+/**
+ * Lädt den Zustand der rechten Sidebar (Container Panel)
+ */
+export function getRightSidebarOpen(): boolean {
+  const prefs = getUserPreferences();
+  return prefs.rightSidebarOpen ?? false; // Default: geschlossen
+}
+
+/**
+ * Speichert die Anzahl der Bilder pro Seite
+ */
+export function saveImagesPerPage(count: number) {
+  saveUserPreferences({ imagesPerPage: count });
+}
+
+/**
+ * Lädt die Anzahl der Bilder pro Seite
+ */
+export function getImagesPerPage(): number {
+  const prefs = getUserPreferences();
+  return prefs.imagesPerPage ?? 50; // Default: 50 Bilder pro Seite
 }

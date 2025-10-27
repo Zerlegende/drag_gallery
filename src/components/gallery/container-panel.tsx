@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, X, Plus, Trash2, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Trash2, ChevronsDownUp, ChevronsUpDown, Pencil } from "lucide-react";
 import Image from "next/image";
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
@@ -304,6 +304,42 @@ function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, 
     },
   });
 
+  const { showToast } = useToast();
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newName, setNewName] = useState(tag.name);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleRename = async () => {
+    if (!newName.trim() || newName === tag.name) {
+      setIsRenaming(false);
+      setNewName(tag.name);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`/api/tags/${tag.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Fehler beim Umbenennen des Tags");
+      }
+
+      showToast("success", "Tag erfolgreich umbenannt");
+      setIsRenaming(false);
+      // Reload page to refresh tags
+      window.location.reload();
+    } catch (error) {
+      showToast("error", "Fehler beim Umbenennen des Tags");
+      setNewName(tag.name);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div 
       ref={setNodeRef}
@@ -313,35 +349,69 @@ function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, 
       )}
     >
       <div className="p-3 flex items-center justify-between hover:bg-accent transition-colors">
-        <button
-          onClick={onToggleExpanded}
-          className="flex items-center gap-2 flex-1"
-        >
-          <Badge variant="secondary">{tag.name}</Badge>
-          <span className="text-xs text-muted-foreground">({images.length})</span>
-          <ChevronRight
-            className={cn(
-              "h-4 w-4 transition-transform ml-auto",
-              isExpanded ? "rotate-90" : ""
+        {isRenaming ? (
+          <div className="flex items-center gap-2 flex-1">
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isSubmitting) {
+                  handleRename();
+                } else if (e.key === "Escape") {
+                  setIsRenaming(false);
+                  setNewName(tag.name);
+                }
+              }}
+              onBlur={handleRename}
+              autoFocus
+              disabled={isSubmitting}
+              className="h-7 text-sm"
+            />
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={onToggleExpanded}
+              className="flex items-center gap-2 flex-1"
+            >
+              <Badge variant="secondary">{tag.name}</Badge>
+              <span className="text-xs text-muted-foreground">({images.length})</span>
+              <ChevronRight
+                className={cn(
+                  "h-4 w-4 transition-transform ml-auto",
+                  isExpanded ? "rotate-90" : ""
+                )}
+              />
+            </button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsRenaming(true);
+              }}
+              className="h-8 w-8 p-0 ml-2"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteTag();
+                }}
+                className="h-8 w-8 p-0 ml-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             )}
-          />
-        </button>
-        {isAdmin && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteTag();
-            }}
-            className="h-8 w-8 p-0 ml-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          </>
         )}
       </div>
 
-      {isExpanded && (
+      {isExpanded && !isRenaming && (
         <div 
           className={cn(
             "p-2 transition-colors",
@@ -387,6 +457,11 @@ function ContainerImageItem({ image, onRemove }: ContainerImageItemProps) {
           fill
           className="object-cover"
           draggable={false}
+          sizes="64px"
+          quality={50}
+          loading="lazy"
+          placeholder="blur"
+          blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
         />
       </div>
       <button

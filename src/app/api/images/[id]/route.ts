@@ -10,11 +10,13 @@ const patchSchema = z.object({
   imagename: z.string().optional(),
 });
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
+
+  const { id } = await params; // Await params
 
   const json = await request.json();
   const parsed = patchSchema.safeParse(json);
@@ -25,12 +27,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   await withTransaction(async (client) => {
     // Update imagename wenn vorhanden
     if (parsed.data.imagename !== undefined) {
-      await updateImageName(params.id, parsed.data.imagename);
+      await updateImageName(id, parsed.data.imagename);
     }
 
     // Update tags wenn vorhanden
     if (parsed.data.tags !== undefined) {
-      await client.query("DELETE FROM image_tags WHERE image_id = $1", [params.id]);
+      await client.query("DELETE FROM image_tags WHERE image_id = $1", [id]);
       
       if (parsed.data.tags.length > 0) {
         // Check if we have UUIDs (tag IDs) or names
@@ -41,7 +43,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
           const values = parsed.data.tags.map((_, index) => `($1, $${index + 2})`).join(",");
           await client.query(
             `INSERT INTO image_tags (image_id, tag_id) VALUES ${values} ON CONFLICT DO NOTHING`,
-            [params.id, ...parsed.data.tags],
+            [id, ...parsed.data.tags],
           );
         } else {
           // We have tag names - use upsert
@@ -50,7 +52,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
             const values = tags.map((tag, index) => `($1, $${index + 2})`).join(",");
             await client.query(
               `INSERT INTO image_tags (image_id, tag_id) VALUES ${values} ON CONFLICT DO NOTHING`,
-              [params.id, ...tags.map((tag) => tag.id)],
+              [id, ...tags.map((tag) => tag.id)],
             );
           }
         }
@@ -58,7 +60,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
   });
 
-  const image = await getImageById(params.id);
+  const image = await getImageById(id);
   if (!image) {
     return new NextResponse("Not Found", { status: 404 });
   }
@@ -66,7 +68,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   return NextResponse.json({ image });
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return new NextResponse("Unauthorized", { status: 401 });
@@ -77,7 +79,9 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     return new NextResponse("Forbidden", { status: 403 });
   }
 
-  const image = await getImageById(params.id);
+  const { id } = await params; // Await params
+
+  const image = await getImageById(id);
   if (!image) {
     return new NextResponse("Not Found", { status: 404 });
   }
@@ -92,8 +96,8 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 
   // Lösche aus DB
   await withTransaction(async (client) => {
-    await client.query("DELETE FROM image_tags WHERE image_id = $1", [params.id]);
-    await client.query("DELETE FROM images WHERE id = $1", [params.id]);
+    await client.query("DELETE FROM image_tags WHERE image_id = $1", [id]);
+    await client.query("DELETE FROM images WHERE id = $1", [id]);
   });
 
   return new NextResponse(null, { status: 204 });

@@ -33,7 +33,7 @@ import type { ImageWithTags, TagRecord } from "@/lib/db";
 import { formatFileSize } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useSidebar } from "@/components/sidebar-context";
-import { getImageSize, saveImageSize } from "@/lib/user-preferences";
+import { getImageSize, saveImageSize, getImagesPerPage, saveImagesPerPage } from "@/lib/user-preferences";
 
 export type GalleryShellProps = {
   initialImages: ImageWithTags[];
@@ -54,8 +54,10 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [selectedImage, setSelectedImage] = useState<ImageWithTags | null>(null);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [imageSize, setImageSize] = useState<ImageSize>(() => getImageSize());
+  const [imageSize, setImageSize] = useState<ImageSize>("small"); // Default für SSR
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [imagesPerPage, setImagesPerPageState] = useState(50); // Default für SSR
   const draggedImagesRef = useRef<string[]>([]);
   
   // Physics state for drag animation
@@ -63,10 +65,18 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const lastDragPos = useRef({ x: 0, y: 0, time: 0 });
   const velocityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Öffne automatisch die Container-Sidebar beim Laden
+  // Lade imageSize aus Cookie nach Hydration
   useEffect(() => {
-    setRightSidebarOpen(true);
-  }, [setRightSidebarOpen]);
+    setImageSize(getImageSize());
+    setImagesPerPageState(getImagesPerPage());
+  }, []);
+
+  // Wrapper-Funktion für imagesPerPage die auch in Cookie speichert
+  const setImagesPerPage = (count: number) => {
+    setImagesPerPageState(count);
+    saveImagesPerPage(count);
+    setCurrentPage(1); // Zurück zur ersten Seite bei Änderung
+  };
 
   // Speichere imageSize im Cookie, wenn sie sich ändert
   useEffect(() => {
@@ -126,6 +136,15 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       return filterTags.every((tagId) => tagIds.has(tagId));
     });
   }, [filterTags, images, searchTerm]);
+
+  // Berechne sichtbare Bilder basierend auf aktueller Seite
+  const visibleImages = useMemo(() => {
+    const startIndex = (currentPage - 1) * imagesPerPage;
+    const endIndex = startIndex + imagesPerPage;
+    return filteredImages.slice(startIndex, endIndex);
+  }, [filteredImages, currentPage, imagesPerPage]);
+
+  const totalPages = Math.ceil(filteredImages.length / imagesPerPage);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -187,6 +206,9 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       if (alreadyHasTag > 0) {
         showToast("info", `${alreadyHasTag} Bild(er) hatten den Tag bereits`, 2000);
       }
+      
+      // Auswahl aufheben nach dem Zuweisen
+      setSelectedImageIds(new Set());
       
       draggedImagesRef.current = [];
       return;
@@ -462,6 +484,8 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               onSearchChange={setSearchTerm}
               imageSize={imageSize}
               onImageSizeChange={setImageSize}
+              imagesPerPage={imagesPerPage}
+              onImagesPerPageChange={setImagesPerPage}
             />
             {isAdmin && filteredImages.length > 0 && (
               <Button
@@ -504,9 +528,9 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       </div>
 
       <div className="mt-8">
-        <SortableContext items={filteredImages.map((image) => image.id)} strategy={rectSortingStrategy}>
+        <SortableContext items={visibleImages.map((image) => image.id)} strategy={rectSortingStrategy}>
           <GalleryGrid
-            images={filteredImages}
+            images={visibleImages}
             onSelectImage={setSelectedImage}
             onDeleteImage={handleSingleDelete}
             isReordering={false}
@@ -518,6 +542,75 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             imageSize={imageSize}
           />
         </SortableContext>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-8 mb-8 flex justify-center items-center gap-2">
+            <Button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              size="sm"
+              variant="outline"
+            >
+              Erste
+            </Button>
+            <Button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              size="sm"
+              variant="outline"
+            >
+              Zurück
+            </Button>
+            
+            <div className="flex items-center gap-2">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    size="sm"
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+
+            <Button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              size="sm"
+              variant="outline"
+            >
+              Weiter
+            </Button>
+            <Button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              size="sm"
+              variant="outline"
+            >
+              Letzte
+            </Button>
+            
+            <span className="ml-4 text-sm text-muted-foreground">
+              Seite {currentPage} von {totalPages} ({filteredImages.length} Bilder)
+            </span>
+          </div>
+        )}
       </div>
 
       <ImageDetailDialog
