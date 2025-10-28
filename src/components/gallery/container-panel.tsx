@@ -649,15 +649,23 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage }: Contain
           onOpenChange={(open) => !open && setSelectedImage(null)}
           onSave={(imageId, data) => {
             // Update the image locally
-            setLocalImages(prev => prev.map(img => 
-              img.id === imageId 
-                ? { 
-                    ...img, 
-                    imagename: data.imagename || img.imagename,
-                    tags: data.tags || img.tags 
-                  }
-                : img
-            ));
+            setLocalImages(prev => prev.map(img => {
+              if (img.id === imageId) {
+                const updatedImg = { ...img };
+                if (data.imagename !== undefined) {
+                  updatedImg.imagename = data.imagename;
+                }
+                if (data.tags) {
+                  // Convert string[] to TagRecord[]
+                  updatedImg.tags = data.tags.map(tagName => {
+                    const existingTag = availableTags.find(t => t.name === tagName);
+                    return existingTag || { id: '', name: tagName };
+                  });
+                }
+                return updatedImg;
+              }
+              return img;
+            }));
           }}
         />
       )}
