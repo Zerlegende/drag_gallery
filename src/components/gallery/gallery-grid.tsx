@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
-import { Trash2 } from "lucide-react";
+import { Trash2, Heart, Download } from "lucide-react";
 
 import type { ImageWithTags } from "@/lib/db";
 import type { ImageSize } from "@/components/gallery/tag-filter";
@@ -127,6 +127,8 @@ function SortableImageCard({
   const [mouseDownPos, setMouseDownPos] = useState<{ x: number; y: number } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [isLiked, setIsLiked] = useState(image.is_liked || false);
+  const [isLiking, setIsLiking] = useState(false);
 
   // Prüfe ob Bild innerhalb der letzten Stunde hochgeladen wurde
   const canDeleteImage = () => {
@@ -138,6 +140,52 @@ function SortableImageCard({
   };
 
   const isDeletable = canDeleteImage();
+
+  const handleLike = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (isLiking || image.is_liked === undefined) return;
+    
+    setIsLiking(true);
+    
+    // Optimistic update
+    setIsLiked(!isLiked);
+    
+    try {
+      const response = await fetch(`/api/images/${image.id}/like`, {
+        method: "POST",
+      });
+      
+      if (!response.ok) {
+        // Revert on error
+        setIsLiked(isLiked);
+      }
+    } catch (error) {
+      // Revert on error
+      setIsLiked(isLiked);
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = image.imagename || image.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading image:", error);
+    }
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setMouseDownPos({ x: e.clientX, y: e.clientY });
@@ -208,6 +256,43 @@ function SortableImageCard({
               onChange={() => onToggleSelection(image.id)}
               className="h-5 w-5 cursor-pointer rounded border-2 border-border bg-background/80 hover:bg-background checked:bg-blue-600 checked:border-blue-600"
             />
+          </div>
+        )}
+
+        {/* Like Button - rechts oben */}
+        {image.is_liked !== undefined && (
+          <div
+            className="absolute top-2 right-2 z-10 flex flex-col gap-2"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={handleLike}
+              disabled={isLiking}
+              className={cn(
+                "rounded-full p-2 backdrop-blur-sm transition-all duration-200",
+                "bg-background/80 hover:bg-background hover:scale-110",
+                isLiked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+              )}
+              title={isLiked ? "Unlike" : "Like"}
+            >
+              <Heart 
+                className={cn("h-5 w-5", isLiked && "fill-red-500")} 
+              />
+            </button>
+            
+            {/* Download Button - unter dem Like Button */}
+            <button
+              onClick={handleDownload}
+              className={cn(
+                "rounded-full p-2 backdrop-blur-sm transition-all duration-200",
+                "bg-background/80 hover:bg-background hover:scale-110",
+                "text-primary hover:text-primary"
+              )}
+              title="Herunterladen"
+            >
+              <Download className="h-5 w-5" />
+            </button>
           </div>
         )}
 

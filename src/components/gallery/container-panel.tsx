@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, X, Plus, Trash2, ChevronsDownUp, ChevronsUpDown, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Trash2, ChevronsDownUp, ChevronsUpDown, Pencil, Heart, Download, Maximize2 } from "lucide-react";
 import Image from "next/image";
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { useSidebar } from "@/components/sidebar-context";
 import { useToast } from "@/components/ui/toast";
 import { useSession } from "next-auth/react";
 import { getExpandedTags, saveExpandedTags } from "@/lib/user-preferences";
+import { ImageDetailDialog } from "./image-detail-dialog";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
@@ -51,6 +52,7 @@ export function ContainerPanel({
   const [expandedTags, setExpandedTags] = useState<Record<string, boolean>>({}); // Start leer für SSR
   const [isHydrated, setIsHydrated] = useState(false); // Track hydration status
   const [isMounted, setIsMounted] = useState(false); // Track wenn Component mounted ist
+  const [expandedContainer, setExpandedContainer] = useState<{ tag: TagRecord; images: ImageWithTags[] } | null>(null);
   
   // Warte bis Component mounted ist, dann verwende Context-Wert
   const localOpen = isMounted ? contextOpen : false;
@@ -237,11 +239,22 @@ export function ContainerPanel({
                 isAdmin={isAdmin}
                 isExpanded={expandedTags[tag.id] ?? true}
                 onToggleExpanded={() => toggleTag(tag.id)}
+                onExpand={(tag, images) => setExpandedContainer({ tag, images })}
               />
             ))
           )}
         </div>
       </div>
+
+      {/* Expanded Container Modal */}
+      {expandedContainer && (
+        <ContainerExpandedModal
+          tag={expandedContainer.tag}
+          images={expandedContainer.images}
+          onClose={() => setExpandedContainer(null)}
+          onRemoveImage={onRemoveImageFromTag}
+        />
+      )}
 
       {/* Confirm Delete Tag Dialog */}
       <ConfirmDialog
@@ -316,9 +329,10 @@ type TagContainerProps = {
   isAdmin: boolean;
   isExpanded: boolean;
   onToggleExpanded: () => void;
+  onExpand: (tag: TagRecord, images: ImageWithTags[]) => void;
 };
 
-function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, isAdmin, isExpanded, onToggleExpanded }: TagContainerProps) {
+function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, isAdmin, isExpanded, onToggleExpanded, onExpand }: TagContainerProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `container-${tag.id}`,
     data: {
@@ -411,9 +425,21 @@ function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, 
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                setIsRenaming(true);
+                onExpand(tag, images);
               }}
               className="h-8 w-8 p-0 ml-2"
+              title="Container vergrößern"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsRenaming(true);
+              }}
+              className="h-8 w-8 p-0 ml-1"
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -496,6 +522,224 @@ function ContainerImageItem({ image, onRemove }: ContainerImageItemProps) {
       >
         <X className="h-3 w-3" />
       </button>
+    </div>
+  );
+}
+
+// Expanded Container Modal
+type ContainerExpandedModalProps = {
+  tag: TagRecord;
+  images: ImageWithTags[];
+  onClose: () => void;
+  onRemoveImage: (imageId: string, tagId: string) => void;
+};
+
+function ContainerExpandedModal({ tag, images, onClose, onRemoveImage }: ContainerExpandedModalProps) {
+  const [selectedImage, setSelectedImage] = useState<ImageWithTags | null>(null);
+  const [localImages, setLocalImages] = useState(images);
+  const [availableTags, setAvailableTags] = useState<TagRecord[]>([]);
+
+  // Fetch available tags for the image detail dialog
+  useEffect(() => {
+    fetch('/api/tags')
+      .then(res => res.json())
+      .then(data => {
+        // API returns { tags: [...] }
+        const tagsArray = data.tags || data;
+        if (Array.isArray(tagsArray)) {
+          setAvailableTags(tagsArray);
+        } else {
+          console.error('Tags response is not an array:', data);
+          setAvailableTags([]);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching tags:', err);
+        setAvailableTags([]);
+      });
+  }, []);
+
+  const handleRemove = (imageId: string) => {
+    onRemoveImage(imageId, tag.id);
+    setLocalImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  const handleLike = async (imageId: string, currentlyLiked: boolean) => {
+    try {
+      await fetch(`/api/images/${imageId}/like`, {
+        method: "POST",
+      });
+      
+      // Update local state
+      setLocalImages(prev => prev.map(img => 
+        img.id === imageId 
+          ? { ...img, is_liked: !currentlyLiked }
+          : img
+      ));
+    } catch (error) {
+      console.error("Error toggling like:", error);
+    }
+  };
+
+  const handleDownload = async (image: ImageWithTags) => {
+    try {
+      const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = image.imagename || image.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading image:", error);
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-lg">{tag.name}</Badge>
+              <span className="text-sm text-muted-foreground">({localImages.length} Bilder)</span>
+            </DialogTitle>
+            <DialogDescription>
+              Verwalte die Bilder in diesem Container
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto">
+            {localImages.length === 0 ? (
+              <div className="flex items-center justify-center h-32 text-muted-foreground">
+                Keine Bilder in diesem Container
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-2">
+                {localImages.map((image) => (
+                  <ContainerImageCard
+                    key={image.id}
+                    image={image}
+                    onRemove={() => handleRemove(image.id)}
+                    onLike={() => handleLike(image.id, image.is_liked || false)}
+                    onDownload={() => handleDownload(image)}
+                    onClick={() => setSelectedImage(image)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="secondary" onClick={onClose}>
+              Schließen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {selectedImage && (
+        <ImageDetailDialog
+          image={selectedImage}
+          availableTags={availableTags}
+          onOpenChange={(open) => !open && setSelectedImage(null)}
+          onSave={(imageId, data) => {
+            // Update the image locally
+            setLocalImages(prev => prev.map(img => 
+              img.id === imageId 
+                ? { 
+                    ...img, 
+                    imagename: data.imagename || img.imagename,
+                    tags: data.tags || img.tags 
+                  }
+                : img
+            ));
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// Image Card for Expanded Container
+type ContainerImageCardProps = {
+  image: ImageWithTags;
+  onRemove: () => void;
+  onLike: () => void;
+  onDownload: () => void;
+  onClick: () => void;
+};
+
+function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick }: ContainerImageCardProps) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const fallback = `https://dummyimage.com/300x300/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
+  const imageUrl = getImageUrl(image.key, fallback);
+
+  return (
+    <div 
+      className="group relative aspect-square rounded-lg overflow-hidden border border-border bg-card hover:shadow-lg transition-all cursor-pointer"
+      onClick={onClick}
+    >
+      {/* Image */}
+      <div className="relative w-full h-full">
+        {!imageLoaded && (
+          <div className="absolute inset-0 bg-muted animate-pulse" />
+        )}
+        <Image
+          src={imageUrl}
+          alt={image.filename}
+          fill
+          className={cn(
+            "object-cover transition-opacity",
+            imageLoaded ? "opacity-100" : "opacity-0"
+          )}
+          onLoad={() => setImageLoaded(true)}
+          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
+        />
+      </div>
+
+      {/* Action Buttons */}
+      <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onLike();
+          }}
+          className={cn(
+            "p-1.5 rounded-full backdrop-blur-sm bg-background/80 hover:bg-background transition-all",
+            image.is_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+          )}
+          title={image.is_liked ? "Unlike" : "Like"}
+        >
+          <Heart className={cn("h-4 w-4", image.is_liked && "fill-red-500")} />
+        </button>
+        
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownload();
+          }}
+          className="p-1.5 rounded-full backdrop-blur-sm bg-background/80 hover:bg-background text-primary transition-all"
+          title="Herunterladen"
+        >
+          <Download className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="p-1.5 rounded-full backdrop-blur-sm bg-background/80 hover:bg-destructive hover:text-destructive-foreground text-destructive transition-all"
+          title="Aus Container entfernen"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

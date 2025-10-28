@@ -20,7 +20,7 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useMutation } from "@tanstack/react-query";
-import { Trash2, Grid3x3, Grid2x2, LayoutGrid } from "lucide-react";
+import { Trash2, Grid3x3, Grid2x2, LayoutGrid, Download } from "lucide-react";
 
 import { GalleryGrid } from "@/components/gallery/gallery-grid";
 import { TagFilter, type ImageSize } from "@/components/gallery/tag-filter";
@@ -64,6 +64,9 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [sortOption, setSortOption] = useState<SortOption>("none"); // Default für SSR
   const [isMounted, setIsMounted] = useState(false); // Track client-side mounting
   const draggedImagesRef = useRef<string[]>([]);
+  const hasLoadedPage = useRef(false); // Track ob die Seite bereits aus sessionStorage geladen wurde
+  const prevFilterTags = useRef<string[]>(initialFilter);
+  const prevSearchTerm = useRef("");
   
   // Physics state for drag animation
   const [dragVelocity, setDragVelocity] = useState({ x: 0, y: 0 });
@@ -75,12 +78,48 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     setIsMounted(true);
   }, []);
 
-  // Lade imageSize aus Cookie nach Hydration
+  // Lade imageSize und currentPage aus Cookie/SessionStorage nach Hydration
   useEffect(() => {
     setImageSize(getImageSize());
     setImagesPerPageState(getImagesPerPage());
     setSortOption(getSortOption());
+    
+    // Lade die gespeicherte Seitenzahl aus sessionStorage
+    const savedPage = sessionStorage.getItem('gallery-current-page');
+    if (savedPage) {
+      const pageNum = parseInt(savedPage, 10);
+      if (!isNaN(pageNum) && pageNum > 0) {
+        setCurrentPage(pageNum);
+      }
+    }
+    
+    hasLoadedPage.current = true;
+    prevFilterTags.current = filterTags;
+    prevSearchTerm.current = searchTerm;
   }, []);
+
+  // Speichere die aktuelle Seite im sessionStorage
+  useEffect(() => {
+    if (isMounted && hasLoadedPage.current) {
+      sessionStorage.setItem('gallery-current-page', currentPage.toString());
+    }
+  }, [currentPage, isMounted]);
+
+  // Zurück zur ersten Seite wenn Filter oder Suchbegriff geändert werden
+  useEffect(() => {
+    if (hasLoadedPage.current) {
+      // Prüfe ob sich tatsächlich etwas geändert hat
+      const filtersChanged = JSON.stringify(prevFilterTags.current) !== JSON.stringify(filterTags);
+      const searchChanged = prevSearchTerm.current !== searchTerm;
+      
+      if (filtersChanged || searchChanged) {
+        setCurrentPage(1);
+      }
+    }
+    
+    prevFilterTags.current = filterTags;
+    prevSearchTerm.current = searchTerm;
+  }, [filterTags, searchTerm]);
 
   // Wrapper-Funktion für imagesPerPage die auch in Cookie speichert
   const setImagesPerPage = (count: number) => {
@@ -408,6 +447,51 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     bulkDeleteMutation.mutate([imageId]);
   };
 
+  // Download functions
+  const downloadImage = async (image: ImageWithTags) => {
+    try {
+      const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = image.imagename || image.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showToast("success", `"${image.imagename || image.filename}" heruntergeladen`);
+    } catch (error) {
+      showToast("error", "Fehler beim Herunterladen des Bildes");
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    const selectedImages = images.filter(img => selectedImageIds.has(img.id));
+    
+    if (selectedImages.length === 0) return;
+
+    showToast("info", `Lade ${selectedImages.length} Bild(er) herunter...`);
+
+    // If only one image, download directly
+    if (selectedImages.length === 1) {
+      await downloadImage(selectedImages[0]);
+      return;
+    }
+
+    // For multiple images, download one by one with delay
+    for (let i = 0; i < selectedImages.length; i++) {
+      await downloadImage(selectedImages[i]);
+      // Small delay to avoid overwhelming the browser
+      if (i < selectedImages.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+
+    showToast("success", `${selectedImages.length} Bild(er) erfolgreich heruntergeladen`);
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const draggedId = event.active.id as string;
     
@@ -520,17 +604,27 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               Auswahl aufheben
             </Button>
           </div>
-          {isAdmin && (
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={bulkDeleteMutation.isPending}
+              variant="default"
+              onClick={handleBulkDownload}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+              <Download className="mr-2 h-4 w-4" />
+              Herunterladen
             </Button>
-          )}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleteMutation.isPending}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -674,6 +768,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           if (!open) setSelectedImage(null);
         }}
         onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+        availableTags={allTags}
       />
 
       <ConfirmDialog
@@ -723,17 +818,27 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               Auswahl aufheben
             </Button>
           </div>
-          {isAdmin && (
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={bulkDeleteMutation.isPending}
+              variant="default"
+              onClick={handleBulkDownload}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+              <Download className="mr-2 h-4 w-4" />
+              Herunterladen
             </Button>
-          )}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleteMutation.isPending}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+              </Button>
+            )}
+          </div>
         </div>
       )}
       
@@ -888,6 +993,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           if (!open) setSelectedImage(null);
         }}
         onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+        availableTags={allTags}
       />
 
       <ConfirmDialog

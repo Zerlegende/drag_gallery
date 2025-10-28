@@ -21,6 +21,15 @@ export type ImageRecord = {
   uploaded_by: string | null;
   created_at: string;
   position: number;
+  liked_count?: number; // Count of likes (from JOIN)
+  is_liked?: boolean;   // Whether current user liked it (from JOIN)
+};
+
+export type LikeRecord = {
+  id: string;
+  user_id: string;
+  image_id: string;
+  created_at: string;
 };
 
 export type TagRecord = {
@@ -79,16 +88,32 @@ function mapImageRows(rows: ({ tags: string | TagRecord[] } & ImageRecord)[]) {
   });
 }
 
-export async function getImagesWithTags(filterTags: string[] = []) {
+export async function getImagesWithTags(filterTags: string[] = [], userId?: string) {
   const params: unknown[] = [];
   let sql = `
-    SELECT i.*, COALESCE(
+    SELECT i.*,
+    COALESCE(
       json_agg(DISTINCT jsonb_build_object('id', t.id, 'name', t.name))
       FILTER (WHERE t.id IS NOT NULL), '[]'
-    ) AS tags
+    ) AS tags,
+    COUNT(DISTINCT l.id) AS liked_count
+  `;
+  
+  // Add is_liked column if userId is provided
+  if (userId) {
+    params.push(userId);
+    sql += `,
+    EXISTS(
+      SELECT 1 FROM likes WHERE image_id = i.id AND user_id = $${params.length}
+    ) AS is_liked
+    `;
+  }
+  
+  sql += `
     FROM images i
     LEFT JOIN image_tags it ON it.image_id = i.id
     LEFT JOIN tags t ON t.id = it.tag_id
+    LEFT JOIN likes l ON l.image_id = i.id
   `;
 
   if (filterTags.length > 0) {
@@ -106,7 +131,7 @@ export async function getImagesWithTags(filterTags: string[] = []) {
 
   sql += " GROUP BY i.id ORDER BY i.position ASC, i.created_at DESC";
 
-  const rows = await query<{ tags: string } & ImageRecord>(sql, params);
+  const rows = await query<{ tags: string; liked_count?: string; is_liked?: boolean } & ImageRecord>(sql, params);
   return mapImageRows(rows);
 }
 

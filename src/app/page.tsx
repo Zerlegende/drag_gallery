@@ -8,6 +8,7 @@ import { UploadButton } from "@/components/gallery/upload-button";
 import { GalleryPageClient } from "@/components/gallery/gallery-page-client";
 
 async function GalleryLoader({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const session = await auth();
   const params = await searchParams;
   const tagFilter = params.tag;
   const filterTags = Array.isArray(tagFilter)
@@ -17,7 +18,7 @@ async function GalleryLoader({ searchParams }: { searchParams: Promise<Record<st
       : [];
 
   const [images, tags] = await Promise.all([
-    getImagesWithTags(filterTags),
+    getImagesWithTags(filterTags, session?.user?.id),
     getAllTags(),
   ]);
 
