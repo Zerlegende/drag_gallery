@@ -162,23 +162,62 @@ export function ContainerPanel({
   };
 
   return (
-    <aside 
-      className={cn(
-        "fixed top-0 right-0 h-screen bg-background border-l border-border shadow-lg transition-all duration-300 z-30 flex flex-col",
-        localOpen ? "w-80" : "w-16"
+    <>
+      {/* Mobile: Floating Button */}
+      <button
+        onClick={() => setRightSidebarOpen(!localOpen)}
+        className={cn(
+          "fixed bottom-4 right-4 z-40 p-3 rounded-full bg-primary text-primary-foreground shadow-lg md:hidden",
+          "hover:scale-110 active:scale-95 transition-transform"
+        )}
+        aria-label="Toggle Container Panel"
+      >
+        {localOpen ? <ChevronRight className="h-6 w-6" /> : <ChevronLeft className="h-6 w-6" />}
+      </button>
+
+      {/* Mobile: Overlay */}
+      {localOpen && (
+        <div
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setRightSidebarOpen(false)}
+        />
       )}
-    >
-      {/* Toggle Button */}
-      <div className="flex h-14 items-center justify-center border-b">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setRightSidebarOpen(!localOpen)}
-          className="h-8 w-8 p-0"
-        >
-          {localOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
-      </div>
+
+      {/* Panel */}
+      <aside 
+        className={cn(
+          "fixed top-0 right-0 h-screen bg-background border-l border-border shadow-lg transition-all duration-300 z-30 flex flex-col",
+          // Mobile: Full width when open, hidden when closed
+          "w-full md:w-80",
+          localOpen ? "translate-x-0" : "translate-x-full md:translate-x-0",
+          // Desktop: Normal behavior
+          !localOpen && "md:w-16"
+        )}
+      >
+        {/* Toggle Button - Desktop only */}
+        <div className="hidden md:flex h-14 items-center justify-center border-b">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRightSidebarOpen(!localOpen)}
+            className="h-8 w-8 p-0"
+          >
+            {localOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+        </div>
+
+        {/* Mobile: Header with Close Button */}
+        <div className="flex md:hidden h-14 items-center justify-between px-4 border-b">
+          <h2 className="text-lg font-semibold">Container</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRightSidebarOpen(false)}
+            className="h-8 w-8 p-0"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
 
       {/* Panel Content */}
       <div className={cn(
@@ -317,6 +356,7 @@ export function ContainerPanel({
         </DialogContent>
       </Dialog>
     </aside>
+    </>
   );
 }
 
@@ -602,24 +642,24 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage }: Contain
   return (
     <>
       <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-[98vw] md:max-w-[95vw] max-h-[98vh] md:max-h-[95vh] overflow-hidden flex flex-col p-3 md:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-lg">{tag.name}</Badge>
-              <span className="text-sm text-muted-foreground">({localImages.length} Bilder)</span>
+            <DialogTitle className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <Badge variant="secondary" className="text-base md:text-lg">{tag.name}</Badge>
+              <span className="text-xs md:text-sm text-muted-foreground">({localImages.length} Bilder)</span>
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs md:text-sm">
               Verwalte die Bilder in diesem Container
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto -mx-3 md:-mx-0">
             {localImages.length === 0 ? (
-              <div className="flex items-center justify-center h-32 text-muted-foreground">
+              <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
                 Keine Bilder in diesem Container
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-3 p-2">
                 {localImages.map((image) => (
                   <ContainerImageCard
                     key={image.id}
@@ -634,8 +674,12 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage }: Contain
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="secondary" onClick={onClose}>
+          <DialogFooter className="flex-row gap-2 sm:gap-0">
+            <Button 
+              variant="secondary" 
+              onClick={onClose}
+              className="w-full sm:w-auto"
+            >
               Schließen
             </Button>
           </DialogFooter>
@@ -689,7 +733,7 @@ function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick }: Co
 
   return (
     <div 
-      className="group relative aspect-square rounded-lg overflow-hidden border border-border bg-card hover:shadow-lg transition-all cursor-pointer"
+      className="group relative aspect-square rounded-lg overflow-hidden border border-border bg-card hover:shadow-lg active:scale-95 transition-all cursor-pointer touch-manipulation"
       onClick={onClick}
     >
       {/* Image */}
@@ -710,20 +754,20 @@ function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick }: Co
         />
       </div>
 
-      {/* Action Buttons */}
-      <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Action Buttons - Always visible on mobile, hover on desktop */}
+      <div className="absolute top-1 right-1 flex flex-col gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onLike();
           }}
           className={cn(
-            "p-1.5 rounded-full backdrop-blur-sm bg-background/80 hover:bg-background transition-all",
+            "p-2 md:p-1.5 rounded-full backdrop-blur-sm bg-background/90 md:bg-background/80 hover:bg-background transition-all touch-manipulation active:scale-90",
             image.is_liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
           )}
           title={image.is_liked ? "Unlike" : "Like"}
         >
-          <Heart className={cn("h-4 w-4", image.is_liked && "fill-red-500")} />
+          <Heart className={cn("h-5 w-5 md:h-4 md:w-4", image.is_liked && "fill-red-500")} />
         </button>
         
         <button
@@ -731,10 +775,10 @@ function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick }: Co
             e.stopPropagation();
             onDownload();
           }}
-          className="p-1.5 rounded-full backdrop-blur-sm bg-background/80 hover:bg-background text-primary transition-all"
+          className="p-2 md:p-1.5 rounded-full backdrop-blur-sm bg-background/90 md:bg-background/80 hover:bg-background text-primary transition-all touch-manipulation active:scale-90"
           title="Herunterladen"
         >
-          <Download className="h-4 w-4" />
+          <Download className="h-5 w-5 md:h-4 md:w-4" />
         </button>
 
         <button
@@ -742,10 +786,10 @@ function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick }: Co
             e.stopPropagation();
             onRemove();
           }}
-          className="p-1.5 rounded-full backdrop-blur-sm bg-background/80 hover:bg-destructive hover:text-destructive-foreground text-destructive transition-all"
+          className="p-2 md:p-1.5 rounded-full backdrop-blur-sm bg-background/90 md:bg-background/80 hover:bg-destructive hover:text-destructive-foreground text-destructive transition-all touch-manipulation active:scale-90"
           title="Aus Container entfernen"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5 md:h-4 md:w-4" />
         </button>
       </div>
     </div>

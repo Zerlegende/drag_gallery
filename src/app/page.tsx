@@ -35,13 +35,28 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
   return (
     <GalleryPageClient>
       <div className="w-full py-6 px-6">
-        <div className="mb-6 flex items-end justify-between gap-4">
+        {/* Mobile: Zentrierte Überschrift, gestapeltes Layout */}
+        <div className="mb-6 md:hidden">
+          <h1 className="text-2xl font-semibold tracking-tight text-center mb-3">Galerie</h1>
+          <p className="text-sm text-muted-foreground text-center mb-4">
+            Organisiere deine Bilder mit Tags und Filtern.
+          </p>
+          <div className="flex justify-center">
+            <UploadButton />
+          </div>
+        </div>
+
+        {/* Desktop: Nebeneinander Layout */}
+        <div className="mb-6 hidden md:flex items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Galerie</h1>
-            <p className="text-muted-foreground">Organisiere deine Bilder mit Tags, Filtern und Drag & Drop.</p>
+            <p className="text-muted-foreground">
+              Organisiere deine Bilder mit Tags, Filtern und Drag & Drop.
+            </p>
           </div>
           <UploadButton />
         </div>
+
         <Suspense fallback={<div className="text-muted-foreground">Lade Bilder...</div>}>
           <GalleryLoader searchParams={searchParams} />
         </Suspense>

@@ -58,21 +58,23 @@ export function GalleryGrid({
   }
 
   // Bestimme die Grid-Klassen basierend auf der Bildgröße
+  // small = viele kleine Kacheln, medium = mittlere Größe, large = 1 Bild pro Reihe
   const gridClasses = {
-    small: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6",
+    small: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6",
     medium: "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
-    large: "grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3",
+    large: "grid-cols-1",
   };
 
   return (
     <>
-      <div className="mb-4 rounded-lg border-2 border-dashed border-primary bg-primary/5 p-4 text-center">
+      {/* Info-Box nur auf Desktop anzeigen */}
+      <div className="mb-3 md:mb-4 rounded-lg border-2 border-dashed border-primary bg-primary/5 p-3 md:p-4 text-center hidden md:block">
         <p className="text-sm font-medium text-primary">
           🎯 Ziehe Bilder in die Container auf der rechten Seite um Tags zuzuweisen
         </p>
       </div>
       <div 
-        className={cn("grid gap-4", gridClasses[imageSize])}
+        className={cn("grid gap-2 md:gap-4", gridClasses[imageSize])}
         style={{ perspective: '1000px' }}
       >
         {images.map((image) => (
@@ -259,10 +261,10 @@ function SortableImageCard({
           </div>
         )}
 
-        {/* Like Button - rechts oben */}
+        {/* Like & Download Buttons - rechts oben */}
         {image.is_liked !== undefined && (
           <div
-            className="absolute top-2 right-2 z-10 flex flex-col gap-2"
+            className="absolute top-2 right-2 z-10 flex flex-col gap-1.5 md:gap-2"
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -270,28 +272,30 @@ function SortableImageCard({
               onClick={handleLike}
               disabled={isLiking}
               className={cn(
-                "rounded-full p-2 backdrop-blur-sm transition-all duration-200",
-                "bg-background/80 hover:bg-background hover:scale-110",
-                isLiked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+                "rounded-full p-2 md:p-2 backdrop-blur-sm transition-all duration-200 touch-manipulation active:scale-90",
+                "bg-background/90 md:bg-background/80 hover:bg-background hover:scale-110",
+                isLiked ? "text-red-500" : "text-muted-foreground hover:text-red-500",
+                "shadow-md md:shadow-sm"
               )}
               title={isLiked ? "Unlike" : "Like"}
             >
               <Heart 
-                className={cn("h-5 w-5", isLiked && "fill-red-500")} 
+                className={cn("h-5 w-5 md:h-5 md:w-5", isLiked && "fill-red-500")} 
               />
             </button>
             
-            {/* Download Button - unter dem Like Button */}
+            {/* Download Button */}
             <button
               onClick={handleDownload}
               className={cn(
-                "rounded-full p-2 backdrop-blur-sm transition-all duration-200",
-                "bg-background/80 hover:bg-background hover:scale-110",
-                "text-primary hover:text-primary"
+                "rounded-full p-2 md:p-2 backdrop-blur-sm transition-all duration-200 touch-manipulation active:scale-90",
+                "bg-background/90 md:bg-background/80 hover:bg-background hover:scale-110",
+                "text-primary hover:text-primary",
+                "shadow-md md:shadow-sm"
               )}
               title="Herunterladen"
             >
-              <Download className="h-5 w-5" />
+              <Download className="h-5 w-5 md:h-5 md:w-5" />
             </button>
           </div>
         )}

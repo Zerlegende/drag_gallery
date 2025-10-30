@@ -28,6 +28,8 @@ export type TagFilterProps = {
   onImagesPerPageChange?: (count: number) => void;
   sortOption?: SortOption;
   onSortChange?: (sort: SortOption) => void;
+  onSelectAll?: () => void;
+  hasSelection?: boolean;
 };
 
 export function TagFilter({ 
@@ -41,19 +43,40 @@ export function TagFilter({
   onImagesPerPageChange,
   sortOption = "date-desc",
   onSortChange,
+  onSelectAll,
+  hasSelection = false,
 }: TagFilterProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [showAllTags, setShowAllTags] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     onSearchChange(searchTerm);
   }, [onSearchChange, searchTerm]);
 
   const filteredTags = tags.filter((tag) => tag.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  
+  // Bestimme wie viele Tags initial angezeigt werden
+  const initialTagCount = isMobile ? 5 : 10;
+  const displayedTags = showAllTags || searchTerm.length > 0 
+    ? filteredTags 
+    : filteredTags.slice(0, initialTagCount);
+  const hasHiddenTags = filteredTags.length > initialTagCount && searchTerm.length === 0;
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[200px]">
           <Input
             placeholder="Nach Titeln, Namen oder Tags suchen..."
             value={searchTerm}
@@ -62,9 +85,29 @@ export function TagFilter({
           />
           <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         </div>
+        {onSelectAll && (
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={hasSelection ? "default" : "outline"}
+                  size="sm"
+                  onClick={onSelectAll}
+                  className="h-9 whitespace-nowrap"
+                >
+                  Alles auswählen
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Alle sichtbaren Bilder auswählen</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
         {onImageSizeChange && (
           <TooltipProvider delayDuration={0}>
             <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-background">
+              {/* Mobile: Nur 2 Optionen (small & large) */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -77,24 +120,28 @@ export function TagFilter({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Kleine Bilder (mehr anzeigen)</p>
+                  <p className="md:hidden">Klein</p>
+                  <p className="hidden md:block">Kleine Kacheln (6 pro Reihe)</p>
                 </TooltipContent>
               </Tooltip>
+              
+              {/* Medium: Nur auf Desktop sichtbar */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant={imageSize === "medium" ? "default" : "ghost"}
                     size="sm"
                     onClick={() => onImageSizeChange("medium")}
-                    className="h-8 px-2"
+                    className="h-8 px-2 hidden md:inline-flex"
                   >
                     <Grid2x2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Mittelgroße Bilder (Standard)</p>
+                  <p>Mittlere Kacheln (4 pro Reihe)</p>
                 </TooltipContent>
               </Tooltip>
+              
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -107,7 +154,8 @@ export function TagFilter({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Große Bilder (weniger anzeigen)</p>
+                  <p className="md:hidden">Groß</p>
+                  <p className="hidden md:block">Große Ansicht (1 pro Reihe)</p>
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -171,19 +219,41 @@ export function TagFilter({
         {filteredTags.length === 0 ? (
           <span className="text-xs text-muted-foreground">Keine Tags vorhanden.</span>
         ) : (
-          filteredTags.map((tag) => {
-            const isActive = activeTagIds.includes(tag.id);
-            return (
+          <>
+            {displayedTags.map((tag) => {
+              const isActive = activeTagIds.includes(tag.id);
+              return (
+                <Button
+                  key={tag.id}
+                  variant={isActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onToggle(tag.id)}
+                >
+                  #{tag.name}
+                </Button>
+              );
+            })}
+            
+            {/* Mehr/Weniger anzeigen Button */}
+            {hasHiddenTags && (
               <Button
-                key={tag.id}
-                variant={isActive ? "default" : "outline"}
+                variant="ghost"
                 size="sm"
-                onClick={() => onToggle(tag.id)}
+                onClick={() => setShowAllTags(!showAllTags)}
+                className="text-muted-foreground hover:text-foreground"
               >
-                #{tag.name}
+                {showAllTags ? (
+                  <>
+                    Weniger anzeigen ({filteredTags.length - initialTagCount} ausgeblendet)
+                  </>
+                ) : (
+                  <>
+                    + {filteredTags.length - initialTagCount} weitere Tags
+                  </>
+                )}
               </Button>
-            );
-          })
+            )}
+          </>
         )}
       </div>
     </div>

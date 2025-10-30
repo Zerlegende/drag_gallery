@@ -63,6 +63,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [imagesPerPage, setImagesPerPageState] = useState(50); // Default für SSR
   const [sortOption, setSortOption] = useState<SortOption>("none"); // Default für SSR
   const [isMounted, setIsMounted] = useState(false); // Track client-side mounting
+  const [isMobile, setIsMobile] = useState(false); // Track mobile screen
   const draggedImagesRef = useRef<string[]>([]);
   const hasLoadedPage = useRef(false); // Track ob die Seite bereits aus sessionStorage geladen wurde
   const prevFilterTags = useRef<string[]>(initialFilter);
@@ -73,9 +74,15 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const lastDragPos = useRef({ x: 0, y: 0, time: 0 });
   const velocityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Track client-side mounting für DndContext
+  // Track client-side mounting für DndContext und Mobile detection
   useEffect(() => {
     setIsMounted(true);
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Lade imageSize und currentPage aus Cookie/SessionStorage nach Hydration
@@ -148,13 +155,13 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Reduziere von default ~10 auf 8 Pixel
+        distance: 8, // Minimal drag distance
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 150, // Reduziere von default 250ms auf 150ms
-        tolerance: 5,
+        delay: 100, // Schnellere Touch-Aktivierung für mobile
+        tolerance: 8, // Etwas mehr Toleranz für Touch
       },
     })
   );
@@ -604,14 +611,15 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               Auswahl aufheben
             </Button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               size="sm"
               variant="default"
               onClick={handleBulkDownload}
+              className="flex-1 sm:flex-none"
             >
-              <Download className="mr-2 h-4 w-4" />
-              Herunterladen
+              <Download className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Herunterladen</span>
             </Button>
             {isAdmin && (
               <Button
@@ -619,18 +627,21 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                 variant="destructive"
                 onClick={handleBulkDelete}
                 disabled={bulkDeleteMutation.isPending}
+                className="flex-1 sm:flex-none"
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+                <Trash2 className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">
+                  {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+                </span>
               </Button>
             )}
           </div>
         </div>
       )}
 
-      <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mt-8">
-        <div className="space-y-4 w-full">
-          <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-4 md:gap-6 md:flex-row md:items-end md:justify-between mt-4 md:mt-8">
+        <div className="space-y-3 md:space-y-4 w-full">
+          <div className="flex flex-col items-stretch gap-3">
             <TagFilter
               tags={availableTags}
               activeTagIds={filterTags}
@@ -648,14 +659,17 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               onImagesPerPageChange={setImagesPerPage}
               sortOption={sortOption}
               onSortChange={handleSortChange}
+              onSelectAll={selectAllImages}
+              hasSelection={selectedImageIds.size > 0}
             />
             {filterTags.length > 0 && (
               <Button
                 onClick={() => setFilterTags([])}
                 variant="ghost"
                 size="sm"
+                className="self-start"
               >
-                Alle zurücksetzen
+                Filter zurücksetzen
               </Button>
             )}
           </div>
@@ -785,16 +799,11 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     );
   }
 
-  // Render gallery with DnD after mounting on client
-  return (
-    <DndContext 
-      sensors={sensors} 
-      onDragEnd={handleDragEnd} 
-      onDragStart={handleDragStart}
-      onDragMove={handleDragMove}
-      collisionDetection={pointerWithin}
-    >
-      <div>
+  // Render gallery with DnD after mounting on client (Desktop only)
+  const galleryContent = (
+    <div>
+      {/* Container Panel - nur auf Desktop */}
+      {!isMobile && (
         <ContainerPanel
           tags={availableTags}
           images={images}
@@ -803,6 +812,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           onTagCreated={handleTagCreated}
           onTagDeleted={handleTagDeleted}
         />
+      )}
       
       {selectedImageIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4 shadow-2xl min-w-[300px]">
@@ -844,7 +854,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mt-8">
         <div className="space-y-4 w-full">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col items-stretch gap-3">
             <TagFilter
               tags={availableTags}
               activeTagIds={filterTags}
@@ -860,16 +870,9 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               onImagesPerPageChange={setImagesPerPage}
               sortOption={sortOption}
               onSortChange={handleSortChange}
+              onSelectAll={isAdmin ? selectAllImages : undefined}
+              hasSelection={selectedImageIds.size > 0}
             />
-            {isAdmin && sortedImages.length > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={selectAllImages}
-              >
-                Alle auswählen
-              </Button>
-            )}
           </div>
           {filterTags.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -919,70 +922,103 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="mt-8 mb-8 flex justify-center items-center gap-2">
-            <Button
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
-              size="sm"
-              variant="outline"
-            >
-              Erste
-            </Button>
-            <Button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              size="sm"
-              variant="outline"
-            >
-              Zurück
-            </Button>
-            
-            <div className="flex items-center gap-2">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                
-                return (
-                  <Button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    size="sm"
-                    variant={currentPage === pageNum ? "default" : "outline"}
-                  >
-                    {pageNum}
-                  </Button>
-                );
-              })}
+          <div className="mt-6 md:mt-8 mb-6 md:mb-8">
+            {/* Mobile: Kompakte Version */}
+            <div className="flex md:hidden flex-col gap-3">
+              <div className="flex justify-between items-center gap-2">
+                <Button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Zurück
+                </Button>
+                <span className="text-sm text-muted-foreground whitespace-nowrap px-2">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Weiter
+                </Button>
+              </div>
+              <div className="text-xs text-center text-muted-foreground">
+                {sortedImages.length} Bilder gesamt
+              </div>
             </div>
 
-            <Button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              size="sm"
-              variant="outline"
-            >
-              Weiter
-            </Button>
-            <Button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
-              size="sm"
-              variant="outline"
-            >
-              Letzte
-            </Button>
-            
-            <span className="ml-4 text-sm text-muted-foreground">
-              Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)
-            </span>
+            {/* Desktop: Vollständige Version */}
+            <div className="hidden md:flex justify-center items-center gap-2 flex-wrap">
+              <Button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                size="sm"
+                variant="outline"
+              >
+                Erste
+              </Button>
+              <Button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                size="sm"
+                variant="outline"
+              >
+                Zurück
+              </Button>
+              
+              <div className="flex items-center gap-2">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      size="sm"
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                size="sm"
+                variant="outline"
+              >
+                Weiter
+              </Button>
+              <Button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                size="sm"
+                variant="outline"
+              >
+                Letzte
+              </Button>
+              
+              <span className="ml-4 text-sm text-muted-foreground">
+                Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -1007,16 +1043,31 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         onConfirm={confirmBulkDelete}
       />
 
-      <DragOverlay dropAnimation={null} style={{ pointerEvents: 'none' }}>
-        {activeId ? (
-          <SimpleDragPreview 
-            imageIds={draggedImagesRef.current} 
-            images={images}
-            velocity={dragVelocity}
-          />
-        ) : null}
-      </DragOverlay>
+      {/* DragOverlay nur auf Desktop */}
+      {!isMobile && (
+        <DragOverlay dropAnimation={null} style={{ pointerEvents: 'none' }}>
+          {activeId ? (
+            <SimpleDragPreview 
+              imageIds={draggedImagesRef.current} 
+              images={images}
+              velocity={dragVelocity}
+            />
+          ) : null}
+        </DragOverlay>
+      )}
       </div>
+  );
+
+  // Auf Desktop: Mit DndContext, auf Mobile: Ohne DndContext
+  return isMobile ? galleryContent : (
+    <DndContext 
+      sensors={sensors} 
+      onDragEnd={handleDragEnd} 
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
+      collisionDetection={pointerWithin}
+    >
+      {galleryContent}
     </DndContext>
   );
 }

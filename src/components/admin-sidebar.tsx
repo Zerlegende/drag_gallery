@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,6 +23,7 @@ export function AdminSidebar() {
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const { leftSidebarCollapsed, setLeftSidebarCollapsed } = useSidebar();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Nur für Admins anzeigen
   const isAdmin = session?.user && (session.user as any).role === 'admin';
@@ -46,12 +47,39 @@ export function AdminSidebar() {
   ];
 
   return (
-    <aside 
-      className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r bg-card transition-all duration-300",
-        leftSidebarCollapsed ? "w-16" : "w-64"
+    <>
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        className={cn(
+          "fixed top-3 left-3 z-50 p-2 rounded-lg bg-card border shadow-lg md:hidden",
+          mobileMenuOpen && "bg-primary text-primary-foreground"
+        )}
+        aria-label="Toggle menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Mobile Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
       )}
-    >
+
+      {/* Sidebar */}
+      <aside 
+        className={cn(
+          "fixed left-0 top-0 z-40 h-screen border-r bg-card transition-all duration-300",
+          // Desktop
+          "hidden md:block",
+          leftSidebarCollapsed ? "md:w-16" : "md:w-64",
+          // Mobile
+          "md:translate-x-0",
+          mobileMenuOpen ? "block translate-x-0 w-64" : "-translate-x-full w-64"
+        )}
+      >
       <div className="flex h-full flex-col">
         {/* Header */}
         <div className="flex h-14 items-center justify-between border-b px-4">
@@ -70,21 +98,23 @@ export function AdminSidebar() {
         <nav className="flex-1 space-y-1 p-2">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
+            const showLabel = mobileMenuOpen || !leftSidebarCollapsed;
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive 
                     ? "bg-primary text-primary-foreground" 
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  leftSidebarCollapsed && "justify-center"
+                  !showLabel && "justify-center"
                 )}
-                title={leftSidebarCollapsed ? item.label : undefined}
+                title={!showLabel ? item.label : undefined}
               >
                 <item.icon className="h-4 w-4" />
-                {!leftSidebarCollapsed && <span>{item.label}</span>}
+                {showLabel && <span>{item.label}</span>}
               </Link>
             );
           })}
@@ -92,7 +122,8 @@ export function AdminSidebar() {
 
         {/* Footer: User Info + Logout */}
         <div className="border-t p-4 space-y-4">
-          {!leftSidebarCollapsed && (
+          {/* Avatar und Username - Immer im mobilen Menü anzeigen, nur collapsed auf Desktop ausblenden */}
+          {(mobileMenuOpen || !leftSidebarCollapsed) && (
             <div className="flex flex-col items-center gap-3">
               <div className="relative w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-4 border-border">
                 {(session.user as any).avatar ? (
@@ -116,20 +147,23 @@ export function AdminSidebar() {
           <Button 
             variant="ghost" 
             size="sm"
-            onClick={() => signOut()}
-            className={cn("w-full gap-2", leftSidebarCollapsed && "px-2")}
-            title={leftSidebarCollapsed ? "Logout" : undefined}
+            onClick={() => {
+              signOut();
+              setMobileMenuOpen(false);
+            }}
+            className={cn("w-full gap-2", !mobileMenuOpen && leftSidebarCollapsed && "px-2")}
+            title={!mobileMenuOpen && leftSidebarCollapsed ? "Logout" : undefined}
           >
             <LogOut className="h-4 w-4" />
-            {!leftSidebarCollapsed && <span>Logout</span>}
+            {(mobileMenuOpen || !leftSidebarCollapsed) && <span>Logout</span>}
           </Button>
 
-          {/* Toggle Button */}
+          {/* Toggle Button - Nur auf Desktop anzeigen */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
-            className={cn("w-full gap-2", leftSidebarCollapsed && "px-2")}
+            className={cn("w-full gap-2 hidden md:flex", leftSidebarCollapsed && "px-2")}
             title={leftSidebarCollapsed ? "Sidebar ausfahren" : "Sidebar einklappen"}
           >
             {leftSidebarCollapsed ? (
@@ -144,5 +178,6 @@ export function AdminSidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }
