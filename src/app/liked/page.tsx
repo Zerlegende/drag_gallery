@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { query, getAllTags } from "@/lib/db";
 import type { ImageRecord } from "@/lib/db";
 import { LikedGalleryView } from "@/components/gallery/liked-gallery-view";
+import { LoadingState } from "@/components/loading-state";
 import { Heart } from "lucide-react";
 
 // Funktion zum Laden der gelikten Bilder eines Users
@@ -69,7 +70,7 @@ export default async function LikedPage() {
         </div>
         <p className="text-muted-foreground">Deine mit Herz markierten Favoriten.</p>
       </div>
-      <Suspense fallback={<div className="text-muted-foreground">Lade gelikte Bilder...</div>}>
+      <Suspense fallback={<LoadingState message="Lade gelikte Bilder..." slowLoadThreshold={2000} />}>
         <LikedGalleryLoader />
       </Suspense>
     </div>

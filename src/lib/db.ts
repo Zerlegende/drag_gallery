@@ -2,6 +2,7 @@ import { Pool } from "pg";
 import type { PoolClient, QueryResultRow } from "pg";
 
 import { env } from "@/lib/env";
+import { withDatabaseRetry } from "@/lib/retry";
 
 const pool = new Pool({
   connectionString: env.server().DATABASE_URL,
@@ -40,28 +41,32 @@ export type TagRecord = {
 export type ImageWithTags = ImageRecord & { tags: TagRecord[] };
 
 export async function query<T extends QueryResultRow = any>(sql: string, params: unknown[] = []) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query<T>(sql, params);
-    return result.rows;
-  } finally {
-    client.release();
-  }
+  return withDatabaseRetry(async () => {
+    const client = await pool.connect();
+    try {
+      const result = await client.query<T>(sql, params);
+      return result.rows;
+    } finally {
+      client.release();
+    }
+  });
 }
 
 export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const result = await fn(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  return withDatabaseRetry(async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await fn(client);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 }
 
 function mapImageRows(rows: ({ tags: string | TagRecord[] } & ImageRecord)[]) {

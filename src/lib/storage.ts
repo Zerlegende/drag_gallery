@@ -2,6 +2,7 @@ import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 
 import { env } from "@/lib/env";
+import { withStorageRetry } from "@/lib/retry";
 
 const { MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_ENDPOINT, MINIO_PUBLIC_ENDPOINT, MINIO_REGION, MINIO_BUCKET, MINIO_USE_SSL } =
   env.server();
@@ -28,33 +29,37 @@ export async function createPresignedUpload({
   maxSize: number;
   expiresInSeconds?: number;
 }) {
-  const presignedPost = await createPresignedPost(s3Client, {
-    Bucket: MINIO_BUCKET,
-    Key: key,
-    Conditions: [["content-length-range", 0, maxSize], ["eq", "$Content-Type", contentType]],
-    Fields: {
-      "Content-Type": contentType,
-    },
-    Expires: expiresInSeconds,
+  return withStorageRetry(async () => {
+    const presignedPost = await createPresignedPost(s3Client, {
+      Bucket: MINIO_BUCKET,
+      Key: key,
+      Conditions: [["content-length-range", 0, maxSize], ["eq", "$Content-Type", contentType]],
+      Fields: {
+        "Content-Type": contentType,
+      },
+      Expires: expiresInSeconds,
+    });
+
+    // Wenn eine öffentliche URL konfiguriert ist, ersetze die interne URL
+    if (MINIO_PUBLIC_ENDPOINT) {
+      const internalUrl = new URL(presignedPost.url);
+      const publicUrl = new URL(MINIO_PUBLIC_ENDPOINT);
+      presignedPost.url = presignedPost.url.replace(internalUrl.origin, publicUrl.origin);
+    }
+
+    return presignedPost;
   });
-
-  // Wenn eine öffentliche URL konfiguriert ist, ersetze die interne URL
-  if (MINIO_PUBLIC_ENDPOINT) {
-    const internalUrl = new URL(presignedPost.url);
-    const publicUrl = new URL(MINIO_PUBLIC_ENDPOINT);
-    presignedPost.url = presignedPost.url.replace(internalUrl.origin, publicUrl.origin);
-  }
-
-  return presignedPost;
 }
 
 export async function deleteObject(key: string) {
-  await s3Client.send(
-    new DeleteObjectCommand({
-      Bucket: MINIO_BUCKET,
-      Key: key,
-    }),
-  );
+  return withStorageRetry(async () => {
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: MINIO_BUCKET,
+        Key: key,
+      }),
+    );
+  });
 }
 
 export function getPublicUrl(key: string): string {

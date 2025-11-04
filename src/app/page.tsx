@@ -6,6 +6,7 @@ import { getAllTags, getImagesWithTags } from "@/lib/db";
 import { GalleryShell } from "@/components/gallery/gallery-shell";
 import { UploadButton } from "@/components/gallery/upload-button";
 import { GalleryPageClient } from "@/components/gallery/gallery-page-client";
+import { LoadingState } from "@/components/loading-state";
 
 async function GalleryLoader({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await auth();
@@ -57,7 +58,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
           <UploadButton />
         </div>
 
-        <Suspense fallback={<div className="text-muted-foreground">Lade Bilder...</div>}>
+        <Suspense fallback={<LoadingState message="Lade Galerie..." slowLoadThreshold={2000} />}>
           <GalleryLoader searchParams={searchParams} />
         </Suspense>
       </div>

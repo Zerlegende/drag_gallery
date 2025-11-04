@@ -301,10 +301,12 @@ function SortableImageCard({
         )}
 
         <div className="relative aspect-[4/3] overflow-hidden">
-          {/* Skeleton Loader */}
+          {/* Loading Spinner */}
           {!imageLoaded && (
-            <div className="absolute inset-0 bg-muted animate-pulse">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+            <div className="absolute inset-0 bg-muted/50 flex items-center justify-center">
+              <div className="relative">
+                <div className="h-8 w-8 rounded-full border-4 border-muted-foreground/20 border-t-primary animate-spin" />
+              </div>
             </div>
           )}
           
