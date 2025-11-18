@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Heart, X, Download } from "lucide-react";
 import type { ImageWithTags, TagRecord } from "@/lib/db";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { env } from "@/lib/env";
 import { Badge } from "@/components/ui/badge";
 import { ImageDetailDialog } from "@/components/gallery/image-detail-dialog";
+import { ImageFullscreenMobile } from "@/components/gallery/image-fullscreen-mobile";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
@@ -24,6 +25,17 @@ type LikedGalleryViewProps = {
 export function LikedGalleryView({ images, availableTags }: LikedGalleryViewProps) {
   const [selectedImage, setSelectedImage] = useState<ImageWithTags | null>(null);
   const [localImages, setLocalImages] = useState(images);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Handle unlike (remove from view optimistically)
   const handleUnlike = async (imageId: string, e?: React.MouseEvent) => {
@@ -120,7 +132,8 @@ export function LikedGalleryView({ images, availableTags }: LikedGalleryViewProp
         ))}
       </div>
 
-      {selectedImage && (
+      {/* Desktop: Detail Dialog mit allen Funktionen */}
+      {!isMobile && selectedImage && (
         <ImageDetailDialog
           image={selectedImage}
           onOpenChange={(open) => {
@@ -128,6 +141,28 @@ export function LikedGalleryView({ images, availableTags }: LikedGalleryViewProp
           }}
           onSave={handleSave}
           availableTags={availableTags}
+        />
+      )}
+
+      {/* Mobile: Einfache Vollbildansicht */}
+      {isMobile && (
+        <ImageFullscreenMobile
+          image={selectedImage}
+          onClose={() => setSelectedImage(null)}
+          availableTags={availableTags}
+          onSave={handleSave}
+          onNavigate={(direction) => {
+            if (!selectedImage) return;
+            const currentIndex = localImages.findIndex(img => img.id === selectedImage.id);
+            if (currentIndex === -1) return;
+            
+            const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            if (newIndex >= 0 && newIndex < localImages.length) {
+              setSelectedImage(localImages[newIndex]);
+            }
+          }}
+          hasPrev={selectedImage ? localImages.findIndex(img => img.id === selectedImage.id) > 0 : false}
+          hasNext={selectedImage ? localImages.findIndex(img => img.id === selectedImage.id) < localImages.length - 1 : false}
         />
       )}
     </>

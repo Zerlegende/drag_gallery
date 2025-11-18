@@ -6,6 +6,47 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+// GET /api/images/:id/like - Get like information for an image
+export async function GET(request: NextRequest, context: RouteContext) {
+  try {
+    const { id } = await context.params;
+
+    // Get total like count
+    const countResult = await query(
+      "SELECT COUNT(*)::int as count FROM likes WHERE image_id = $1",
+      [id]
+    );
+    const likeCount = countResult[0]?.count || 0;
+
+    // Get users who liked this image (with their info)
+    const likersResult = await query(
+      `SELECT u.id, u.username as name, u.avatar as image 
+       FROM likes l 
+       JOIN users u ON l.user_id::uuid = u.id 
+       WHERE l.image_id = $1 
+       ORDER BY l.created_at DESC`,
+      [id]
+    );
+
+    const likers = likersResult.map((row: any) => ({
+      userId: row.id,
+      userName: row.name,
+      userImage: row.image,
+    }));
+
+    return NextResponse.json({ 
+      likeCount,
+      likers,
+    });
+  } catch (error) {
+    console.error("Error fetching like info:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch like info", likeCount: 0, likers: [] },
+      { status: 500 }
+    );
+  }
+}
+
 // POST /api/images/:id/like - Like/Unlike an image
 export async function POST(request: NextRequest, context: RouteContext) {
   try {

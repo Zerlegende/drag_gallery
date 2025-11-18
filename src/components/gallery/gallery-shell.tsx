@@ -20,12 +20,14 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useMutation } from "@tanstack/react-query";
-import { Trash2, Grid3x3, Grid2x2, LayoutGrid, Download } from "lucide-react";
+import { Trash2, Grid3x3, Grid2x2, LayoutGrid, Download, Heart } from "lucide-react";
 
 import { GalleryGrid } from "@/components/gallery/gallery-grid";
 import { TagFilter, type ImageSize } from "@/components/gallery/tag-filter";
 import type { SortOption } from "@/components/gallery/tag-filter";
 import { ImageDetailDialog } from "@/components/gallery/image-detail-dialog";
+import { ImageFullscreenMobile } from "@/components/gallery/image-fullscreen-mobile";
+import { InstaMode } from "@/components/gallery/insta-mode";
 import { ContainerPanel } from "@/components/gallery/container-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,6 +66,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [sortOption, setSortOption] = useState<SortOption>("none"); // Default für SSR
   const [isMounted, setIsMounted] = useState(false); // Track client-side mounting
   const [isMobile, setIsMobile] = useState(false); // Track mobile screen
+  const [showInstaMode, setShowInstaMode] = useState(false); // Track Insta-Mode
   const draggedImagesRef = useRef<string[]>([]);
   const hasLoadedPage = useRef(false); // Track ob die Seite bereits aus sessionStorage geladen wurde
   const prevFilterTags = useRef<string[]>(initialFilter);
@@ -776,14 +779,55 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         </div>
       )}
 
-      <ImageDetailDialog
-        image={selectedImage}
-        onOpenChange={(open) => {
-          if (!open) setSelectedImage(null);
-        }}
-        onSave={(id, data) => updateMutation.mutate({ id, ...data })}
-        availableTags={allTags}
-      />
+      {/* Desktop: Detail Dialog mit allen Funktionen */}
+      {!isMobile && (
+        <ImageDetailDialog
+          image={selectedImage}
+          onOpenChange={(open) => {
+            if (!open) setSelectedImage(null);
+          }}
+          onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+          availableTags={allTags}
+        />
+      )}
+
+      {/* Mobile: Einfache Vollbildansicht */}
+      {isMobile && (
+        <ImageFullscreenMobile
+          image={selectedImage}
+          onClose={() => {
+            console.log('🚪 onClose called in gallery-shell');
+            setSelectedImage(null);
+          }}
+          availableTags={allTags}
+          onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+          onNavigate={(direction) => {
+            console.log('🧭 onNavigate called:', direction, 'selectedImage:', selectedImage?.id);
+            if (!selectedImage) {
+              console.log('⚠️ No selectedImage - aborting navigation');
+              return;
+            }
+            const currentIndex = sortedImages.findIndex(img => img.id === selectedImage.id);
+            console.log('📍 Current index:', currentIndex, 'sortedImages.length:', sortedImages.length);
+            if (currentIndex === -1) {
+              console.log('⚠️ Image not found in sortedImages - aborting');
+              return;
+            }
+            
+            const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            console.log('🎯 New index:', newIndex);
+            if (newIndex >= 0 && newIndex < sortedImages.length) {
+              const newImage = sortedImages[newIndex];
+              console.log('✅ Setting new image:', newImage.id, newImage.filename);
+              setSelectedImage(newImage);
+            } else {
+              console.log('⚠️ New index out of bounds');
+            }
+          }}
+          hasPrev={selectedImage ? sortedImages.findIndex(img => img.id === selectedImage.id) > 0 : false}
+          hasNext={selectedImage ? sortedImages.findIndex(img => img.id === selectedImage.id) < sortedImages.length - 1 : false}
+        />
+      )}
 
       <ConfirmDialog
         open={showBulkDeleteConfirm}
@@ -795,6 +839,20 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         variant="destructive"
         onConfirm={confirmBulkDelete}
       />
+
+      {/* Insta-Mode */}
+      {showInstaMode && (
+        <>
+          {console.log('🎨 Rendering InstaMode, showInstaMode:', showInstaMode, 'images count:', sortedImages.length)}
+          <InstaMode
+            images={sortedImages}
+            onClose={() => {
+              console.log('🚪 Closing InstaMode');
+              setShowInstaMode(false);
+            }}
+          />
+        </>
+      )}
       </>
     );
   }
@@ -873,6 +931,21 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               onSelectAll={isAdmin ? selectAllImages : undefined}
               hasSelection={selectedImageIds.size > 0}
             />
+            
+            {/* Insta-Mode Button - nur auf Mobile */}
+            {isMobile && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  console.log('🎬 Insta-Mode button clicked! Setting showInstaMode to true');
+                  setShowInstaMode(true);
+                }}
+              >
+                <Heart className="mr-2 h-4 w-4" />
+                Insta-Mode
+              </Button>
+            )}
           </div>
           {filterTags.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -1023,14 +1096,55 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         )}
       </div>
 
-      <ImageDetailDialog
-        image={selectedImage}
-        onOpenChange={(open) => {
-          if (!open) setSelectedImage(null);
-        }}
-        onSave={(id, data) => updateMutation.mutate({ id, ...data })}
-        availableTags={allTags}
-      />
+      {/* Desktop: Detail Dialog mit allen Funktionen */}
+      {!isMobile && (
+        <ImageDetailDialog
+          image={selectedImage}
+          onOpenChange={(open) => {
+            if (!open) setSelectedImage(null);
+          }}
+          onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+          availableTags={allTags}
+        />
+      )}
+
+      {/* Mobile: Einfache Vollbildansicht */}
+      {isMobile && (
+        <ImageFullscreenMobile
+          image={selectedImage}
+          onClose={() => {
+            console.log('🚪 onClose called in gallery-shell (2nd location)');
+            setSelectedImage(null);
+          }}
+          availableTags={allTags}
+          onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+          onNavigate={(direction) => {
+            console.log('🧭 onNavigate called (2nd location):', direction, 'selectedImage:', selectedImage?.id);
+            if (!selectedImage) {
+              console.log('⚠️ No selectedImage - aborting navigation');
+              return;
+            }
+            const currentIndex = sortedImages.findIndex(img => img.id === selectedImage.id);
+            console.log('📍 Current index:', currentIndex, 'sortedImages.length:', sortedImages.length);
+            if (currentIndex === -1) {
+              console.log('⚠️ Image not found in sortedImages - aborting');
+              return;
+            }
+            
+            const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            console.log('🎯 New index:', newIndex);
+            if (newIndex >= 0 && newIndex < sortedImages.length) {
+              const newImage = sortedImages[newIndex];
+              console.log('✅ Setting new image:', newImage.id, newImage.filename);
+              setSelectedImage(newImage);
+            } else {
+              console.log('⚠️ New index out of bounds');
+            }
+          }}
+          hasPrev={selectedImage ? sortedImages.findIndex(img => img.id === selectedImage.id) > 0 : false}
+          hasNext={selectedImage ? sortedImages.findIndex(img => img.id === selectedImage.id) < sortedImages.length - 1 : false}
+        />
+      )}
 
       <ConfirmDialog
         open={showBulkDeleteConfirm}
@@ -1054,6 +1168,20 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             />
           ) : null}
         </DragOverlay>
+      )}
+
+      {/* Insta-Mode */}
+      {showInstaMode && (
+        <>
+          {console.log('🎨 Rendering InstaMode (2nd location), showInstaMode:', showInstaMode, 'images count:', sortedImages.length)}
+          <InstaMode
+            images={sortedImages}
+            onClose={() => {
+              console.log('🚪 Closing InstaMode (2nd location)');
+              setShowInstaMode(false);
+            }}
+          />
+        </>
       )}
       </div>
   );

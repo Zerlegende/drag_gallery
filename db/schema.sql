@@ -45,3 +45,18 @@ CREATE INDEX IF NOT EXISTS idx_images_uploaded_by ON images(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_images_position ON images(position);
 CREATE INDEX IF NOT EXISTS idx_image_tags_image_id ON image_tags(image_id);
 CREATE INDEX IF NOT EXISTS idx_image_tags_tag_id ON image_tags(tag_id);
+
+-- Likes Tabelle (User-Likes auf Bilder)
+CREATE TABLE IF NOT EXISTS likes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, image_id)
+);
+
+-- Indizes für Performance
+CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);
+CREATE INDEX IF NOT EXISTS idx_likes_image_id ON likes(image_id);
+CREATE INDEX IF NOT EXISTS idx_likes_created_at ON likes(created_at DESC);
+
