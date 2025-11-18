@@ -91,7 +91,6 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
       "image/heic": [".heic"],
       "image/heif": [".heif"],
       "image/webp": [".webp"],
-      "image/gif": [".gif"],
       "image/avif": [".avif"],
     },
   });
@@ -153,16 +152,51 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
       
       for (const item of filesToUpload) {
         try {
-          console.log('Uploading:', item.file.name);
+          console.log('Processing:', item.file.name);
           
-          // 1. Hole presigned URL
+          // 1. Convert to AVIF (if not already AVIF)
+          let fileToUpload = item.file;
+          let finalFilename = item.file.name;
+          let finalMime = item.file.type;
+          let finalSize = item.file.size;
+          
+          if (item.file.type !== 'image/avif') {
+            console.log(`Converting ${item.file.name} to AVIF...`);
+            const convertFormData = new FormData();
+            convertFormData.append('file', item.file);
+            
+            const convertResponse = await fetch('/api/convert-to-avif', {
+              method: 'POST',
+              body: convertFormData,
+            });
+            
+            if (!convertResponse.ok) {
+              throw new Error('Konvertierung zu AVIF fehlgeschlagen');
+            }
+            
+            // Get metadata from headers
+            const originalFormat = convertResponse.headers.get('X-Original-Format');
+            const avifSize = convertResponse.headers.get('X-AVIF-Size');
+            console.log(`Converted from ${originalFormat}, size: ${avifSize} bytes`);
+            
+            // Get the AVIF blob
+            const avifBlob = await convertResponse.blob();
+            finalFilename = item.file.name.replace(/\.[^/.]+$/, '') + '.avif';
+            finalMime = 'image/avif';
+            finalSize = avifBlob.size;
+            fileToUpload = new File([avifBlob], finalFilename, { type: 'image/avif' });
+          }
+          
+          console.log('Uploading:', finalFilename);
+          
+          // 2. Hole presigned URL
           const uploadResponse = await fetch("/api/upload", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              filename: item.file.name,
-              mime: item.file.type,
-              size: item.file.size,
+              filename: finalFilename,
+              mime: finalMime,
+              size: finalSize,
             }),
           });
 
@@ -177,12 +211,12 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
           console.log('Fields:', fields);
           console.log('ObjectKey:', objectKey);
 
-          // 2. Upload zu MinIO
+          // 3. Upload zu MinIO
           const formData = new FormData();
           Object.entries(fields).forEach(([key, value]) => {
             formData.append(key, value as string);
           });
-          formData.append("file", item.file);
+          formData.append("file", fileToUpload);
 
           console.log('Uploading to MinIO...');
           const minioResponse = await fetch(url, {
@@ -204,10 +238,10 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              filename: item.file.name,
+              filename: finalFilename,
               key: objectKey,
-              mime: item.file.type,
-              size: item.file.size,
+              mime: finalMime,
+              size: finalSize,
               tags: [],
             }),
           });

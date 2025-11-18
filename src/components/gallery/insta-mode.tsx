@@ -59,6 +59,25 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     return unviewedImages[randomIndex];
   };
 
+  // Preload next images for smooth UX
+  const preloadNextImages = () => {
+    const imagesToPreload: ImageWithTags[] = [];
+    
+    // If we're at the end of history, preload 3 new random images
+    if (historyIndex === imageHistory.length - 1) {
+      for (let i = 0; i < 3; i++) {
+        const nextImg = getRandomImage();
+        if (nextImg && !imagesToPreload.find(img => img.id === nextImg.id)) {
+          imagesToPreload.push(nextImg);
+        }
+      }
+      
+      if (imagesToPreload.length > 0) {
+        setImageHistory(prev => [...prev, ...imagesToPreload]);
+      }
+    }
+  };
+
   // Navigate to next image (swipe up)
   const goToNextImage = () => {
     // Check if we can go forward in history
@@ -87,17 +106,38 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     }
   };
 
-  // Initialize with random image
+  // Initialize with random image and preload next 3
   useEffect(() => {
     console.log('🚀 InstaMode mounted, images count:', images.length);
+    const initialImages: ImageWithTags[] = [];
+    
+    // Get initial image
     const img = getRandomImage();
-    console.log('📸 Initial image:', img?.id, img?.filename);
     if (img) {
-      setCurrentImage(img);
-      setImageHistory([img]);
+      initialImages.push(img);
+      
+      // Preload next 3 images
+      for (let i = 0; i < 3; i++) {
+        const nextImg = getRandomImage();
+        if (nextImg && !initialImages.find(existing => existing.id === nextImg.id)) {
+          initialImages.push(nextImg);
+        }
+      }
+      
+      console.log('📸 Loaded initial + 3 preloaded images, total:', initialImages.length);
+      setCurrentImage(initialImages[0]);
+      setImageHistory(initialImages);
       setHistoryIndex(0);
     }
   }, []);
+
+  // Preload next images when user gets close to the end
+  useEffect(() => {
+    // When user is 2 images away from the end, preload more
+    if (historyIndex >= imageHistory.length - 2) {
+      preloadNextImages();
+    }
+  }, [historyIndex, imageHistory.length]);
 
   // Update like status when image changes
   useEffect(() => {
@@ -370,6 +410,23 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
             <div>↓ Nach unten wischen für vorheriges Bild</div>
           )}
         </div>
+      </div>
+
+      {/* Preload next 3 images (hidden) */}
+      <div className="hidden">
+        {imageHistory.slice(historyIndex + 1, historyIndex + 4).map((img) => {
+          const preloadUrl = buildImageUrl(img.key, '');
+          return (
+            <Image
+              key={img.id}
+              src={preloadUrl}
+              alt="preload"
+              width={1}
+              height={1}
+              priority
+            />
+          );
+        })}
       </div>
     </div>
   );

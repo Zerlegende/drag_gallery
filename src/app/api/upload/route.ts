@@ -11,7 +11,6 @@ const ALLOWED_IMAGE_TYPES = [
   "image/heic",
   "image/heif",
   "image/webp",
-  "image/gif",
   "image/avif",
 ];
 
@@ -19,7 +18,7 @@ const requestSchema = z.object({
   filename: z.string().min(1),
   mime: z.string().min(1).refine(
     (value) => ALLOWED_IMAGE_TYPES.includes(value),
-    "Nur JPEG, PNG, HEIC, WebP, GIF und AVIF Formate sind erlaubt."
+    "Nur JPEG, PNG, HEIC, WebP und AVIF Formate sind erlaubt."
   ),
   size: z.number().int().positive().max(50 * 1024 * 1024, "Dateien dürfen maximal 50MB groß sein."),
 });
