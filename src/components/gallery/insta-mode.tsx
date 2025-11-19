@@ -28,6 +28,7 @@ export type InstaModeProps = {
 export function InstaMode({ images, onClose }: InstaModeProps) {
   const [currentImage, setCurrentImage] = useState<ImageWithTags | null>(null);
   const [isLiked, setIsLiked] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
   const [isLiking, setIsLiking] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [likers, setLikers] = useState<LikeInfo[]>([]);
@@ -40,35 +41,31 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   const lastTapRef = useRef<number>(0);
 
   // Get random image that hasn't been viewed yet
-  const getRandomImage = () => {
-    console.log('🎲 Getting random image, total images:', images.length);
-    
+  const getRandomImage = (currentViewedIds: Set<string>) => {
     // Filter out already viewed images
-    const unviewedImages = images.filter(img => !viewedImageIds.has(img.id));
-    console.log('👁️ Unviewed images:', unviewedImages.length, '/ Total:', images.length);
+    const unviewedImages = images.filter(img => !currentViewedIds.has(img.id));
     
     if (unviewedImages.length === 0) {
-      console.log('⚠️ All images viewed, resetting...');
       // All images have been viewed, reset the viewed list
-      setViewedImageIds(new Set());
       return images.length > 0 ? images[Math.floor(Math.random() * images.length)] : null;
     }
     
     const randomIndex = Math.floor(Math.random() * unviewedImages.length);
-    console.log('🎯 Selected random index:', randomIndex, 'Image:', unviewedImages[randomIndex]?.filename);
     return unviewedImages[randomIndex];
   };
 
   // Preload next images for smooth UX
   const preloadNextImages = () => {
     const imagesToPreload: ImageWithTags[] = [];
+    const currentViewed = new Set(viewedImageIds);
     
-    // If we're at the end of history, preload 3 new random images
+    // If we're at the end of history, preload 10 new random images
     if (historyIndex === imageHistory.length - 1) {
-      for (let i = 0; i < 3; i++) {
-        const nextImg = getRandomImage();
+      for (let i = 0; i < 10; i++) {
+        const nextImg = getRandomImage(currentViewed);
         if (nextImg && !imagesToPreload.find(img => img.id === nextImg.id)) {
           imagesToPreload.push(nextImg);
+          currentViewed.add(nextImg.id); // Mark as viewed in local copy
         }
       }
       
@@ -80,19 +77,23 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
 
   // Navigate to next image (swipe up)
   const goToNextImage = () => {
+    setIsImageLoading(true);
+    
     // Check if we can go forward in history
     if (historyIndex < imageHistory.length - 1) {
-      // Go forward in history
       const nextIndex = historyIndex + 1;
+      const nextImg = imageHistory[nextIndex];
       setHistoryIndex(nextIndex);
-      setCurrentImage(imageHistory[nextIndex]);
+      setCurrentImage(nextImg);
+      setIsLiked(nextImg.is_liked || false);
     } else {
       // Get a new random image
-      const nextImage = getRandomImage();
+      const nextImage = getRandomImage(viewedImageIds);
       if (nextImage) {
         setImageHistory(prev => [...prev, nextImage]);
         setHistoryIndex(prev => prev + 1);
         setCurrentImage(nextImage);
+        setIsLiked(nextImage.is_liked || false);
       }
     }
   };
@@ -100,31 +101,35 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   // Navigate to previous image (swipe down)
   const goToPreviousImage = () => {
     if (historyIndex > 0) {
+      setIsImageLoading(true);
       const prevIndex = historyIndex - 1;
+      const prevImg = imageHistory[prevIndex];
       setHistoryIndex(prevIndex);
-      setCurrentImage(imageHistory[prevIndex]);
+      setCurrentImage(prevImg);
+      setIsLiked(prevImg.is_liked || false);
     }
   };
 
-  // Initialize with random image and preload next 3
+  // Initialize with random image and preload next 10
   useEffect(() => {
-    console.log('🚀 InstaMode mounted, images count:', images.length);
     const initialImages: ImageWithTags[] = [];
+    const currentViewed = new Set<string>();
     
     // Get initial image
-    const img = getRandomImage();
+    const img = getRandomImage(currentViewed);
     if (img) {
       initialImages.push(img);
+      currentViewed.add(img.id);
       
-      // Preload next 3 images
-      for (let i = 0; i < 3; i++) {
-        const nextImg = getRandomImage();
+      // Preload next 10 images
+      for (let i = 0; i < 10; i++) {
+        const nextImg = getRandomImage(currentViewed);
         if (nextImg && !initialImages.find(existing => existing.id === nextImg.id)) {
           initialImages.push(nextImg);
+          currentViewed.add(nextImg.id);
         }
       }
       
-      console.log('📸 Loaded initial + 3 preloaded images, total:', initialImages.length);
       setCurrentImage(initialImages[0]);
       setImageHistory(initialImages);
       setHistoryIndex(0);
@@ -133,33 +138,61 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
 
   // Preload next images when user gets close to the end
   useEffect(() => {
-    // When user is 2 images away from the end, preload more
-    if (historyIndex >= imageHistory.length - 2) {
+    // When user is 5 images away from the end, preload more
+    if (historyIndex >= imageHistory.length - 5) {
       preloadNextImages();
     }
   }, [historyIndex, imageHistory.length]);
 
-  // Update like status when image changes
+  // AGGRESSIVE PRELOADING: Force browser to cache next 10 images
   useEffect(() => {
-    if (currentImage) {
-      // Mark this image as viewed
-      setViewedImageIds(prev => new Set(prev).add(currentImage.id));
+    const imagesToPreload = imageHistory.slice(historyIndex + 1, historyIndex + 11);
+    
+    imagesToPreload.forEach((img) => {
+      const url = buildImageUrl(img.key, '');
       
-      setIsLiked(currentImage.is_liked || false);
+      // Create native Image object to force browser caching
+      const image = new window.Image();
+      image.src = url;
       
-      // Fetch like count and likers from API
+      // Also add preload link to DOM
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = url;
+      link.fetchPriority = 'high';
+      document.head.appendChild(link);
+    });
+    
+    // Cleanup preload links when component unmounts
+    return () => {
+      const preloadLinks = document.querySelectorAll('link[rel="preload"][as="image"]');
+      preloadLinks.forEach(link => link.remove());
+    };
+  }, [historyIndex, imageHistory]);
+
+  // Update like status when image changes - debounced
+  useEffect(() => {
+    if (!currentImage) return;
+    
+    // Mark this image as viewed
+    setViewedImageIds(prev => new Set(prev).add(currentImage.id));
+    
+    // Debounce API call - only fetch after user stops swiping
+    const timer = setTimeout(() => {
       fetch(`/api/images/${currentImage.id}/like`)
         .then(res => res.json())
         .then(data => {
           setLikeCount(data.likeCount || 0);
           setLikers(data.likers || []);
         })
-        .catch(error => {
-          console.error('Error fetching like info:', error);
+        .catch(() => {
           setLikeCount(0);
           setLikers([]);
         });
-    }
+    }, 300);
+    
+    return () => clearTimeout(timer);
   }, [currentImage]);
 
   // Prevent body scroll
@@ -233,6 +266,8 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    
     touchEndRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
@@ -245,14 +280,19 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     const deltaY = touchStartRef.current.y - touchEndRef.current.y;
     const deltaX = Math.abs(touchEndRef.current.x - touchStartRef.current.x);
     
-    // Swipe up detection (minimum 80px vertical, must be more vertical than horizontal)
-    if (deltaY > 80 && deltaY > deltaX) {
-      // Swipe UP - Next image
+    // Must be more vertical than horizontal
+    if (Math.abs(deltaY) <= deltaX) {
+      touchStartRef.current = null;
+      touchEndRef.current = null;
+      return;
+    }
+    
+    // Swipe up (minimum 80px) - Next image
+    if (deltaY > 80) {
       goToNextImage();
     } 
-    // Swipe down detection (minimum 80px vertical, must be more vertical than horizontal)
-    else if (deltaY < -80 && Math.abs(deltaY) > deltaX) {
-      // Swipe DOWN - Previous image
+    // Swipe down (minimum 80px) - Previous image
+    else if (deltaY < -80) {
       goToPreviousImage();
     }
 
@@ -303,6 +343,13 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
 
       {/* Image Container */}
       <div className="flex-1 flex items-center justify-center relative">
+        {/* Loading Spinner */}
+        {isImageLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+            <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+          </div>
+        )}
+        
         <div className="relative w-full h-full">
           <Image
             src={imageUrl}
@@ -312,6 +359,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
             sizes="100vw"
             quality={90}
             priority
+            onLoadingComplete={() => setIsImageLoading(false)}
           />
         </div>
 
@@ -410,23 +458,6 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
             <div>↓ Nach unten wischen für vorheriges Bild</div>
           )}
         </div>
-      </div>
-
-      {/* Preload next 3 images (hidden) */}
-      <div className="hidden">
-        {imageHistory.slice(historyIndex + 1, historyIndex + 4).map((img) => {
-          const preloadUrl = buildImageUrl(img.key, '');
-          return (
-            <Image
-              key={img.id}
-              src={preloadUrl}
-              alt="preload"
-              width={1}
-              height={1}
-              priority
-            />
-          );
-        })}
       </div>
     </div>
   );

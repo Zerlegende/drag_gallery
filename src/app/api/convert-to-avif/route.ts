@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     console.log(`Converted ${file.name} to AVIF. Original: ${buffer.length} bytes, AVIF: ${avifBuffer.length} bytes`);
 
     // Return the converted image and metadata
-    return new NextResponse(avifBuffer, {
+    return new NextResponse(avifBuffer.buffer as ArrayBuffer, {
       status: 200,
       headers: {
         "Content-Type": "image/avif",
