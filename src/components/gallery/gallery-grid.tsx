@@ -17,9 +17,11 @@ import { env } from "@/lib/env";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
-function getImageUrl(key: string, fallback: string) {
+function getImageUrl(key: string, fallback: string, timestamp?: string) {
   if (!BASE_URL) return fallback;
-  return `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  // Add cache busting timestamp if provided
+  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
 }
 
 type GalleryGridProps = {
@@ -228,7 +230,8 @@ function SortableImageCard({
   };
 
   const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
-  const imageUrl = getImageUrl(image.key, fallback);
+  const timestamp = image.updated_at || image.created_at;
+  const imageUrl = getImageUrl(image.key, fallback, timestamp);
 
   return (
     <article

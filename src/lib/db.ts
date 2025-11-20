@@ -21,6 +21,7 @@ export type ImageRecord = {
   height: number | null;
   uploaded_by: string | null;
   created_at: string;
+  updated_at?: string;
   position: number;
   liked_count?: number; // Count of likes (from JOIN)
   is_liked?: boolean;   // Whether current user liked it (from JOIN)
@@ -195,4 +196,11 @@ export async function upsertTags(client: PoolClient, tagNames: string[]) {
 
   const inserted = await client.query<TagRecord>(insertSql, normalized);
   return inserted.rows;
+}
+
+export async function updateImageSize(imageId: string, size: number) {
+  return withDatabaseRetry(async () => {
+    const sql = `UPDATE images SET size = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`;
+    await query(sql, [size, imageId]);
+  });
 }

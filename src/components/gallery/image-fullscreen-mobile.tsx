@@ -12,9 +12,10 @@ import { Input } from "@/components/ui/input";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
-function buildImageUrl(key: string, fallback: string) {
+function buildImageUrl(key: string, fallback: string, timestamp?: string) {
   if (!BASE_URL) return fallback;
-  return `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
 }
 
 export type ImageFullscreenMobileProps = {
@@ -297,7 +298,8 @@ export function ImageFullscreenMobile({
   }
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
-  const imageUrl = buildImageUrl(image.key, fallback);
+  const timestamp = image.updated_at || image.created_at;
+  const imageUrl = buildImageUrl(image.key, fallback, timestamp);
   
   // Bildname: entweder imagename oder filename
   const displayName = image.imagename || image.filename;

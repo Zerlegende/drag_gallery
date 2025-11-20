@@ -1,35 +1,44 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 
 import type { ImageWithTags, TagRecord } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { X, RotateCw } from "lucide-react";
 import { formatFileSize, cn } from "@/lib/utils";
 import { env } from "@/lib/env";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
-function buildImageUrl(key: string, fallback: string) {
+function buildImageUrl(key: string, fallback: string, timestamp?: string) {
   if (!BASE_URL) return fallback;
-  return `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  // Add cache busting timestamp if provided
+  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
 }
 
 export type ImageDetailDialogProps = {
   image: ImageWithTags | null;
   onOpenChange: (open: boolean) => void;
   onSave: (id: string, data: { tags?: string[]; imagename?: string }) => void;
+  onRotate?: (id: string) => void;
   availableTags?: TagRecord[];
 };
 
-export function ImageDetailDialog({ image, onOpenChange, onSave, availableTags = [] }: ImageDetailDialogProps) {
+export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, availableTags = [] }: ImageDetailDialogProps) {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
+  
   const [imageNameInput, setImageNameInput] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagSearchInput, setTagSearchInput] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
+  const [imageKey, setImageKey] = useState(0); // For forcing image reload
 
   useEffect(() => {
     if (image) {
@@ -37,6 +46,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, availableTags =
       setImageNameInput(image.imagename || "");
       setTagSearchInput("");
       setShowSuggestions(false);
+      setImageKey(prev => prev + 1); // Force reload image
     }
   }, [image]);
 
@@ -45,7 +55,9 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, availableTags =
   }
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
-  const imageUrl = buildImageUrl(image.key, fallback);
+  // Use updated_at or created_at as cache buster
+  const timestamp = image.updated_at || image.created_at;
+  const imageUrl = buildImageUrl(image.key, fallback, timestamp);
 
   // Filter suggestions based on search input (ensure availableTags is an array)
   const suggestions = (Array.isArray(availableTags) ? availableTags : [])
@@ -74,6 +86,41 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, availableTags =
     });
   };
 
+  const handleRotate = async () => {
+    if (!image || isRotating) return;
+    
+    setIsRotating(true);
+    try {
+      const response = await fetch(`/api/images/${image.id}/rotate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ degrees: 90 }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        console.error("Rotation failed:", errorData);
+        throw new Error(errorData.error || "Failed to rotate image");
+      }
+
+      const result = await response.json();
+      console.log("Rotation successful:", result);
+      
+      // Notify parent to refresh gallery - this will update the image object with new updated_at
+      if (onRotate) {
+        await onRotate(image.id);
+      }
+      
+      // Force image reload by incrementing key
+      setImageKey(prev => prev + 1);
+    } catch (error) {
+      console.error("Error rotating image:", error);
+      alert(`Fehler beim Drehen des Bildes: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
+    } finally {
+      setIsRotating(false);
+    }
+  };
+
   return (
     <Dialog open={Boolean(image)} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -84,8 +131,24 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, availableTags =
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="overflow-hidden rounded-lg border border-border">
-            <img src={imageUrl} alt={image.filename} className="w-full" />
+          <div className="overflow-hidden rounded-lg border border-border relative">
+            <img 
+              key={imageKey} 
+              src={imageUrl}
+              alt={image.filename} 
+              className="w-full" 
+            />
+            {isAdmin && onRotate && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRotate}
+                disabled={isRotating}
+                className="absolute top-2 right-2"
+              >
+                <RotateCw className={cn("h-4 w-4", isRotating && "animate-spin")} />
+              </Button>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground" htmlFor="detail-imagename">

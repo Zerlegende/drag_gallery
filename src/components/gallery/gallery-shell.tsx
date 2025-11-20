@@ -20,7 +20,7 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useMutation } from "@tanstack/react-query";
-import { Trash2, Grid3x3, Grid2x2, LayoutGrid, Download, Heart } from "lucide-react";
+import { Trash2, Grid3x3, Grid2x2, LayoutGrid, Download, Heart, RotateCw } from "lucide-react";
 
 import { GalleryGrid } from "@/components/gallery/gallery-grid";
 import { TagFilter, type ImageSize } from "@/components/gallery/tag-filter";
@@ -29,6 +29,7 @@ import { ImageDetailDialog } from "@/components/gallery/image-detail-dialog";
 import { ImageFullscreenMobile } from "@/components/gallery/image-fullscreen-mobile";
 import { InstaMode } from "@/components/gallery/insta-mode";
 import { ContainerPanel } from "@/components/gallery/container-panel";
+import { RotationQueue, type QueueItem } from "@/components/gallery/rotation-queue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -67,6 +68,8 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [isMounted, setIsMounted] = useState(false); // Track client-side mounting
   const [isMobile, setIsMobile] = useState(false); // Track mobile screen
   const [showInstaMode, setShowInstaMode] = useState(false); // Track Insta-Mode
+  const [rotationQueue, setRotationQueue] = useState<QueueItem[]>([]);
+  const isProcessingQueue = useRef(false); // Track if queue is currently being processed
   const draggedImagesRef = useRef<string[]>([]);
   const hasLoadedPage = useRef(false); // Track ob die Seite bereits aus sessionStorage geladen wurde
   const prevFilterTags = useRef<string[]>(initialFilter);
@@ -87,6 +90,58 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Load rotation queue from server on mount
+  useEffect(() => {
+    if (!isMounted || images.length === 0) return;
+    
+    const loadQueue = async () => {
+      try {
+        const response = await fetch('/api/rotation-queue');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.queue && data.queue.length > 0) {
+            // Map server queue to client format
+            const clientQueue: QueueItem[] = data.queue.map((item: any) => {
+              const image = images.find(img => img.id === item.imageId);
+              if (!image) return null;
+              return {
+                id: item.imageId,
+                image,
+                status: item.status,
+                error: item.error,
+              };
+            }).filter((item: QueueItem | null): item is QueueItem => item !== null);
+            
+            setRotationQueue(clientQueue);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load rotation queue:", error);
+      }
+    };
+    
+    loadQueue();
+  }, [isMounted, images.length]);
+
+  // Save rotation queue to server whenever it changes
+  useEffect(() => {
+    // Don't sync to server during initial load
+    if (!isMounted) return;
+  }, [rotationQueue, isMounted]);
+
+  // Auto-resume processing when there are pending items
+  useEffect(() => {
+    if (!isMounted) return;
+    if (isProcessingQueue.current) return; // Already processing
+    
+    const pendingItems = rotationQueue.filter(item => item.status === "pending");
+    
+    // Only start processing if there are pending items
+    if (pendingItems.length > 0) {
+      processRotationQueue(pendingItems);
+    }
+  }, [rotationQueue, isMounted]);
 
   // Lade imageSize und currentPage aus Cookie/SessionStorage nach Hydration
   useEffect(() => {
@@ -457,6 +512,171 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     bulkDeleteMutation.mutate([imageId]);
   };
 
+  // Bulk rotate function with queue
+  const handleBulkRotate = async () => {
+    const selectedImages = images.filter(img => selectedImageIds.has(img.id));
+    
+    if (selectedImages.length === 0) return;
+
+    // Add to server queue
+    try {
+      const response = await fetch('/api/rotation-queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add',
+          imageIds: selectedImages.map(img => img.id),
+        }),
+      });
+
+      if (!response.ok) {
+        showToast("error", "Fehler beim Hinzufügen zur Queue");
+        return;
+      }
+
+      const data = await response.json();
+      
+      // Create new queue items for client
+      const newQueueItems: QueueItem[] = data.added.map((item: any) => ({
+        id: item.imageId,
+        image: images.find(img => img.id === item.imageId)!,
+        status: item.status,
+      })).filter((item: QueueItem) => item.image);
+      
+      // Add to existing queue
+      setRotationQueue(prev => [...prev, ...newQueueItems]);
+      setSelectedImageIds(new Set()); // Clear selection immediately
+
+      // Process new items in background
+      processRotationQueue(newQueueItems);
+    } catch (error) {
+      showToast("error", "Netzwerkfehler");
+    }
+  };
+
+  const processRotationQueue = async (queue: QueueItem[]) => {
+    if (isProcessingQueue.current) {
+      console.log("Queue is already being processed, skipping...");
+      return; // Prevent double processing
+    }
+    
+    isProcessingQueue.current = true;
+    console.log("Starting queue processing with", queue.length, "items");
+    
+    for (let i = 0; i < queue.length; i++) {
+      const item = queue[i];
+      
+      // Skip if already processing, success, or error
+      if (item.status !== "pending") {
+        continue;
+      }
+      
+      // Update to processing on server
+      try {
+        const updateResponse = await fetch('/api/rotation-queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            imageId: item.id,
+            status: 'processing',
+          }),
+        });
+
+        if (!updateResponse.ok) {
+          const errorData = await updateResponse.json();
+          if (errorData.error === "Already processing") {
+            console.log(`Image ${item.id} is already being processed elsewhere, skipping...`);
+            continue;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to update queue status:", error);
+      }
+      
+      // Update local state to processing
+      setRotationQueue(prev => 
+        prev.map(q => q.id === item.id ? { ...q, status: "processing" } : q)
+      );
+
+      try {
+        const response = await fetch(`/api/images/${item.id}/rotate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ degrees: 90 }),
+        });
+
+        if (response.ok) {
+          // Update server
+          await fetch('/api/rotation-queue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update',
+              imageId: item.id,
+              status: 'success',
+            }),
+          });
+          
+          // Update local state
+          setRotationQueue(prev => 
+            prev.map(q => q.id === item.id ? { ...q, status: "success" } : q)
+          );
+        } else {
+          const errorText = await response.text();
+          
+          // Update server
+          await fetch('/api/rotation-queue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update',
+              imageId: item.id,
+              status: 'error',
+              error: errorText || "Fehler beim Drehen",
+            }),
+          });
+          
+          // Update local state
+          setRotationQueue(prev => 
+            prev.map(q => q.id === item.id ? { ...q, status: "error", error: errorText || "Fehler beim Drehen" } : q)
+          );
+        }
+      } catch (error) {
+        // Update server
+        await fetch('/api/rotation-queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            imageId: item.id,
+            status: 'error',
+            error: "Netzwerkfehler",
+          }),
+        });
+        
+        // Update local state
+        setRotationQueue(prev => 
+          prev.map(q => q.id === item.id ? { ...q, status: "error", error: "Netzwerkfehler" } : q)
+        );
+      }
+    }
+
+    console.log("Queue processing finished");
+    isProcessingQueue.current = false;
+
+    // Reload gallery after all rotations are done
+    try {
+      const res = await fetch('/api/images');
+      if (res.ok) {
+        const data = await res.json();
+        setImages(data.images);
+      }
+    } catch (error) {
+      console.error("Failed to reload images:", error);
+    }
+  };
+
   // Download functions
   const downloadImage = async (image: ImageWithTags) => {
     try {
@@ -625,18 +845,29 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               <span className="hidden sm:inline">Herunterladen</span>
             </Button>
             {isAdmin && (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={handleBulkDelete}
-                disabled={bulkDeleteMutation.isPending}
-                className="flex-1 sm:flex-none"
-              >
-                <Trash2 className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">
-                  {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
-                </span>
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkRotate}
+                  className="flex-1 sm:flex-none"
+                >
+                  <RotateCw className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Drehen</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleteMutation.isPending}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Trash2 className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">
+                    {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+                  </span>
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -787,6 +1018,19 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             if (!open) setSelectedImage(null);
           }}
           onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+          onRotate={async (id) => {
+            // Reload the full gallery to get fresh images
+            const res = await fetch('/api/images');
+            if (res.ok) {
+              const data = await res.json();
+              setImages(data.images);
+              // Update the selected image
+              const updatedImage = data.images.find((img: ImageWithTags) => img.id === id);
+              if (updatedImage) {
+                setSelectedImage(updatedImage);
+              }
+            }
+          }}
           availableTags={allTags}
         />
       )}
@@ -853,6 +1097,20 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           />
         </>
       )}
+
+      {/* Rotation Queue */}
+      <RotationQueue
+        items={rotationQueue}
+        onClose={async () => {
+          await fetch('/api/rotation-queue', { method: 'DELETE' });
+          setRotationQueue([]);
+        }}
+        onUpdateItem={(id, status, error) => {
+          setRotationQueue(prev =>
+            prev.map(item => item.id === id ? { ...item, status, error } : item)
+          );
+        }}
+      />
       </>
     );
   }
@@ -896,15 +1154,25 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               Herunterladen
             </Button>
             {isAdmin && (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={handleBulkDelete}
-                disabled={bulkDeleteMutation.isPending}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkRotate}
+                >
+                  <RotateCw className="mr-2 h-4 w-4" />
+                  Drehen
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleteMutation.isPending}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -1104,6 +1372,19 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             if (!open) setSelectedImage(null);
           }}
           onSave={(id, data) => updateMutation.mutate({ id, ...data })}
+          onRotate={async (id) => {
+            // Reload the full gallery to get fresh images
+            const res = await fetch('/api/images');
+            if (res.ok) {
+              const data = await res.json();
+              setImages(data.images);
+              // Update the selected image
+              const updatedImage = data.images.find((img: ImageWithTags) => img.id === id);
+              if (updatedImage) {
+                setSelectedImage(updatedImage);
+              }
+            }
+          }}
           availableTags={allTags}
         />
       )}
@@ -1183,6 +1464,20 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           />
         </>
       )}
+
+      {/* Rotation Queue */}
+      <RotationQueue
+        items={rotationQueue}
+        onClose={async () => {
+          await fetch('/api/rotation-queue', { method: 'DELETE' });
+          setRotationQueue([]);
+        }}
+        onUpdateItem={(id, status, error) => {
+          setRotationQueue(prev =>
+            prev.map(item => item.id === id ? { ...item, status, error } : item)
+          );
+        }}
+      />
       </div>
   );
 

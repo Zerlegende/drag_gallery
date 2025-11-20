@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 
 import { env } from "@/lib/env";
@@ -66,4 +66,29 @@ export function getPublicUrl(key: string): string {
   const endpoint = MINIO_PUBLIC_ENDPOINT || MINIO_ENDPOINT;
   const bucket = MINIO_BUCKET;
   return `${endpoint}/${bucket}/${key}`;
+}
+
+export async function getObject(key: string) {
+  return withStorageRetry(async () => {
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: MINIO_BUCKET,
+        Key: key,
+      })
+    );
+    return response.Body;
+  });
+}
+
+export async function putObject(key: string, body: Buffer, contentType: string) {
+  return withStorageRetry(async () => {
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: MINIO_BUCKET,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      })
+    );
+  });
 }

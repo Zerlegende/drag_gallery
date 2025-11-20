@@ -12,9 +12,10 @@ import { ImageFullscreenMobile } from "@/components/gallery/image-fullscreen-mob
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
-function getImageUrl(key: string, fallback: string) {
+function getImageUrl(key: string, fallback: string, timestamp?: string) {
   if (!BASE_URL) return fallback;
-  return `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
 }
 
 type LikedGalleryViewProps = {
@@ -140,6 +141,18 @@ export function LikedGalleryView({ images, availableTags }: LikedGalleryViewProp
             if (!open) setSelectedImage(null);
           }}
           onSave={handleSave}
+          onRotate={async (id) => {
+            // Reload liked images
+            const res = await fetch('/api/images/liked');
+            if (res.ok) {
+              const data = await res.json();
+              setLocalImages(data.images);
+              const updatedImage = data.images.find((img: ImageWithTags) => img.id === id);
+              if (updatedImage) {
+                setSelectedImage(updatedImage);
+              }
+            }
+          }}
           availableTags={availableTags}
         />
       )}
@@ -206,7 +219,8 @@ function LikedImageCard({ image, onSelect, onUnlike }: LikedImageCardProps) {
   };
 
   const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
-  const imageUrl = getImageUrl(image.key, fallback);
+  const timestamp = image.updated_at || image.created_at;
+  const imageUrl = getImageUrl(image.key, fallback, timestamp);
 
   return (
     <article

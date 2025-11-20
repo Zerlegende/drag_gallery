@@ -20,9 +20,10 @@ import { ImageDetailDialog } from "./image-detail-dialog";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
-function getImageUrl(key: string, fallback: string) {
+function getImageUrl(key: string, fallback: string, timestamp?: string) {
   if (!BASE_URL) return fallback;
-  return `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
+  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
 }
 
 type ContainerPanelProps = {
@@ -53,6 +54,7 @@ export function ContainerPanel({
   const [isHydrated, setIsHydrated] = useState(false); // Track hydration status
   const [isMounted, setIsMounted] = useState(false); // Track wenn Component mounted ist
   const [expandedContainer, setExpandedContainer] = useState<{ tag: TagRecord; images: ImageWithTags[] } | null>(null);
+  const [tagSearchTerm, setTagSearchTerm] = useState("");
   
   // Warte bis Component mounted ist, dann verwende Context-Wert
   const localOpen = isMounted ? contextOpen : false;
@@ -259,6 +261,26 @@ export function ContainerPanel({
               </>
             )}
           </Button>
+          
+          {/* Tag Search */}
+          <div className="relative mt-2">
+            <Input
+              type="text"
+              placeholder="Tags durchsuchen..."
+              value={tagSearchTerm}
+              onChange={(e) => setTagSearchTerm(e.target.value)}
+              className="pr-8"
+            />
+            {tagSearchTerm && (
+              <button
+                onClick={() => setTagSearchTerm("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Suche löschen"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -267,7 +289,11 @@ export function ContainerPanel({
               Keine Tags vorhanden. Erstelle Tags um Container zu nutzen.
             </p>
           ) : (
-            tags.map((tag) => (
+            tags
+              .filter((tag) => 
+                tag.name.toLowerCase().includes(tagSearchTerm.toLowerCase())
+              )
+              .map((tag) => (
               <TagContainer
                 key={tag.id}
                 tag={tag}
@@ -711,6 +737,10 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage }: Contain
               return img;
             }));
           }}
+          onRotate={async (id) => {
+            // Force reload all images from the server
+            window.location.reload();
+          }}
         />
       )}
     </>
@@ -728,8 +758,9 @@ type ContainerImageCardProps = {
 
 function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick }: ContainerImageCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
-  const fallback = `https://dummyimage.com/300x300/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
-  const imageUrl = getImageUrl(image.key, fallback);
+  const fallback = `https://dummyimage.com/400x300/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
+  const timestamp = image.updated_at || image.created_at;
+  const imageUrl = getImageUrl(image.key, fallback, timestamp);
 
   return (
     <div 
