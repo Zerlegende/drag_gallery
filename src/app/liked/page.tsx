@@ -64,11 +64,11 @@ export default async function LikedPage() {
   return (
     <div className="w-full py-6 px-6">
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
           <Heart className="h-8 w-8 text-red-500 fill-red-500" />
           <h1 className="text-3xl font-semibold tracking-tight">Gelikte Bilder</h1>
         </div>
-        <p className="text-muted-foreground">Deine mit Herz markierten Favoriten.</p>
+        <p className="text-muted-foreground text-center md:text-left">Deine mit Herz markierten Favoriten.</p>
       </div>
       <Suspense fallback={<LoadingState message="Lade gelikte Bilder..." slowLoadThreshold={2000} />}>
         <LikedGalleryLoader />

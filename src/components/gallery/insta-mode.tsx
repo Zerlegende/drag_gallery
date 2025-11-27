@@ -34,6 +34,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   const [likeCount, setLikeCount] = useState(0);
   const [likers, setLikers] = useState<LikeInfo[]>([]);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  const [showLikersModal, setShowLikersModal] = useState(false);
   const [viewedImageIds, setViewedImageIds] = useState<Set<string>>(new Set());
   const [imageHistory, setImageHistory] = useState<ImageWithTags[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -408,48 +409,63 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
             />
           </button>
 
-          {/* Like Count */}
-          <span className="text-white font-semibold">
+          {/* Like Count - Clickable */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (likers.length > 0) {
+                setShowLikersModal(true);
+              }
+            }}
+            className={cn(
+              "text-white font-semibold",
+              likers.length > 0 && "hover:text-white/80 transition-colors cursor-pointer"
+            )}
+          >
             {likeCount} {likeCount === 1 ? "Like" : "Likes"}
-          </span>
+          </button>
 
-          {/* Likers Profile Pictures - Right next to likes */}
+          {/* Likers Profile Pictures - Right next to likes - Clickable */}
           {likers.length > 0 && (
-            <>
-              <div className="flex -space-x-2">
-                {likers.slice(0, 5).map((liker, index) => {
-                  const avatarUrl = liker.userImage 
-                    ? buildImageUrl(liker.userImage, liker.userImage)
-                    : null;
-                  
-                  return (
-                    <div
-                      key={liker.userId}
-                      className="relative w-8 h-8 rounded-full border-2 border-black bg-muted overflow-hidden"
-                      style={{ zIndex: likers.length - index }}
-                    >
-                      {avatarUrl ? (
-                        <Image
-                          src={avatarUrl}
-                          alt={liker.userName}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground text-xs font-semibold">
-                          {liker.userName.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLikersModal(true);
+              }}
+              className="flex -space-x-2 hover:scale-105 transition-transform"
+            >
+              {likers.slice(0, 5).map((liker, index) => {
+                const avatarUrl = liker.userImage 
+                  ? buildImageUrl(liker.userImage, liker.userImage)
+                  : null;
+                
+                return (
+                  <div
+                    key={liker.userId}
+                    className="relative w-8 h-8 rounded-full border-2 border-black bg-muted overflow-hidden"
+                    style={{ zIndex: likers.length - index }}
+                  >
+                    {avatarUrl ? (
+                      <Image
+                        src={avatarUrl}
+                        alt={liker.userName}
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground text-xs font-semibold">
+                        {liker.userName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {likers.length > 5 && (
-                <span className="text-white/70 text-sm">
+                <span className="text-white/70 text-sm ml-2">
                   +{likers.length - 5}
                 </span>
               )}
-            </>
+            </button>
           )}
         </div>
 
@@ -461,6 +477,92 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
           )}
         </div>
       </div>
+
+      {/* Likers Modal */}
+      {showLikersModal && likers.length > 0 && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end md:items-center justify-center"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowLikersModal(false);
+          }}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
+          
+          {/* Modal Content */}
+          <div
+            className={cn(
+              "relative bg-background rounded-t-3xl md:rounded-2xl shadow-xl",
+              "w-full md:w-96 max-h-[70vh] md:max-h-[80vh]",
+              "animate-in slide-in-from-bottom md:zoom-in-95 duration-300"
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-background border-b px-6 py-4 rounded-t-3xl md:rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Likes</h3>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowLikersModal(false);
+                  }}
+                  className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Likers List */}
+            <div className="overflow-y-auto max-h-[calc(70vh-4rem)] md:max-h-[calc(80vh-4rem)] p-4">
+              <div className="space-y-2">
+                {likers.map((liker, index) => {
+                  const avatarUrl = liker.userImage 
+                    ? buildImageUrl(liker.userImage, liker.userImage)
+                    : null;
+                  
+                  return (
+                    <div
+                      key={liker.userId}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors",
+                        "animate-in slide-in-from-left duration-300"
+                      )}
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      {/* Avatar */}
+                      <div className="relative w-12 h-12 rounded-full bg-primary/10 overflow-hidden flex-shrink-0">
+                        {avatarUrl ? (
+                          <Image
+                            src={avatarUrl}
+                            alt={liker.userName}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground text-lg font-semibold">
+                            {liker.userName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Username */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{liker.userName}</p>
+                      </div>
+
+                      {/* Heart Icon */}
+                      <Heart className="h-5 w-5 text-red-500 fill-red-500 flex-shrink-0" />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

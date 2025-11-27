@@ -24,8 +24,8 @@ export default async function SettingsPage() {
   return (
     <div className="w-full py-6 px-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight">Einstellungen</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-3xl font-semibold tracking-tight text-center md:text-left">Einstellungen</h1>
+        <p className="text-muted-foreground mt-2 text-center md:text-left">
           Verwalte deine Account-Einstellungen
         </p>
       </div>

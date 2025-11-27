@@ -14,16 +14,23 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  Heart
+  Heart,
+  Upload,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/sidebar-context";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 
 export function AdminSidebar() {
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const { leftSidebarCollapsed, setLeftSidebarCollapsed } = useSidebar();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const { showToast } = useToast();
   
   // Nur für Admins anzeigen
   const isAdmin = session?.user && (session.user as any).role === 'admin';
@@ -45,6 +52,46 @@ export function AdminSidebar() {
     ] : []),
     { href: "/admin/settings", icon: Settings, label: "Settings" },
   ];
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      showToast("error", "Bitte wähle eine Bilddatei aus");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("error", "Bild ist zu groß (max 5MB)");
+      return;
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      const response = await fetch('/api/user/avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload fehlgeschlagen');
+      }
+
+      showToast("success", "Profilbild erfolgreich aktualisiert");
+      // Reload session to get new avatar
+      window.location.reload();
+    } catch (error) {
+      showToast("error", "Fehler beim Hochladen des Profilbilds");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <>
@@ -82,7 +129,7 @@ export function AdminSidebar() {
       >
       <div className="flex h-full flex-col">
         {/* Header */}
-        <div className="flex h-14 items-center justify-between border-b px-4">
+        <div className="flex h-14 items-center justify-center border-b px-4">
           {!leftSidebarCollapsed && (
             <Link href="/" className="flex items-center gap-2 font-semibold">
               <ImageIcon className="h-5 w-5" />
@@ -125,19 +172,25 @@ export function AdminSidebar() {
           {/* Avatar und Username - Immer im mobilen Menü anzeigen, nur collapsed auf Desktop ausblenden */}
           {(mobileMenuOpen || !leftSidebarCollapsed) && (
             <div className="flex flex-col items-center gap-3">
-              <div className="relative w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-4 border-border">
+              <button
+                onClick={() => setAvatarDialogOpen(true)}
+                className="relative w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-4 border-border hover:border-primary transition-colors cursor-pointer group"
+              >
                 {(session.user as any).avatar ? (
                   <img 
                     src={`${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${(session.user as any).avatar}`}
                     alt={session.user.name || 'User'} 
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover group-hover:opacity-75 transition-opacity"
                   />
                 ) : (
                   <span className="text-4xl font-semibold text-primary">
                     {session.user.name?.charAt(0).toUpperCase() || 'U'}
                   </span>
                 )}
-              </div>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                  <ImageIcon className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
               <div className="text-center w-full">
                 <p className="font-medium truncate text-base">{session.user.name}</p>
               </div>
@@ -178,6 +231,64 @@ export function AdminSidebar() {
         </div>
       </div>
     </aside>
+
+    {/* Avatar Dialog */}
+    <Dialog open={avatarDialogOpen} onOpenChange={setAvatarDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between">
+            <span>Profilbild</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAvatarDialogOpen(false)}
+              className="h-6 w-6 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="flex flex-col items-center gap-4 py-4">
+          {/* Großes Profilbild */}
+          <div className="relative w-64 h-64 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-4 border-border">
+            {(session.user as any).avatar ? (
+              <img 
+                src={`${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${(session.user as any).avatar}`}
+                alt={session.user.name || 'User'} 
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="text-8xl font-semibold text-primary">
+                {session.user.name?.charAt(0).toUpperCase() || 'U'}
+              </span>
+            )}
+          </div>
+
+          {/* Upload Button */}
+          <div className="w-full">
+            <input
+              type="file"
+              id="avatar-upload"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              disabled={isUploading}
+              className="hidden"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => document.getElementById('avatar-upload')?.click()}
+              disabled={isUploading}
+              className="w-full gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              {isUploading ? "Wird hochgeladen..." : "Neues Bild hochladen"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

@@ -28,10 +28,10 @@ export default async function UsersPage() {
 
   return (
     <div className="w-full py-6 px-6">
-      <div className="mb-8 flex items-end justify-between">
+      <div className="mb-8 flex items-end justify-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">User Management</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="text-3xl font-semibold tracking-tight text-center md:text-left">User Management</h1>
+          <p className="text-muted-foreground mt-2 text-center md:text-left">
             Verwalte alle Benutzer und ihre Rollen
           </p>
         </div>
