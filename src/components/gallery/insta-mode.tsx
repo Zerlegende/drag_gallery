@@ -6,6 +6,7 @@ import { X, Heart } from "lucide-react";
 import type { ImageWithTags } from "@/lib/db";
 import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
+import { getImageVariantKey } from "@/lib/image-variants-utils";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
@@ -38,9 +39,39 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   const [viewedImageIds, setViewedImageIds] = useState<Set<string>>(new Set());
   const [imageHistory, setImageHistory] = useState<ImageWithTags[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [slideOffset, setSlideOffset] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [preloadedImages, setPreloadedImages] = useState<ImageWithTags[]>([]);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const touchEndRef = useRef<{ x: number; y: number } | null>(null);
   const lastTapRef = useRef<number>(0);
+
+  // Get next 10 images from history or new randoms
+  const getPreloadImages = (): ImageWithTags[] => {
+    const preloads: ImageWithTags[] = [];
+    const currentViewed = new Set(viewedImageIds);
+    
+    // Start from next index in history
+    let startIndex = historyIndex + 1;
+    
+    // First, add from existing history
+    for (let i = startIndex; i < imageHistory.length && preloads.length < 10; i++) {
+      preloads.push(imageHistory[i]);
+    }
+    
+    // Fill remaining with random images
+    while (preloads.length < 10) {
+      const randomImg = getRandomImage(currentViewed);
+      if (randomImg && !preloads.find(img => img.id === randomImg.id)) {
+        preloads.push(randomImg);
+        currentViewed.add(randomImg.id);
+      } else {
+        break; // No more unique images available
+      }
+    }
+    
+    return preloads;
+  };
 
   // Get random image that hasn't been viewed yet
   const getRandomImage = (currentViewedIds: Set<string>) => {
@@ -79,8 +110,6 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
 
   // Navigate to next image (swipe up)
   const goToNextImage = () => {
-    setIsImageLoading(true);
-    
     // Check if we can go forward in history
     if (historyIndex < imageHistory.length - 1) {
       const nextIndex = historyIndex + 1;
@@ -90,20 +119,56 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
       setIsLiked(nextImg.is_liked || false);
     } else {
       // Get a new random image
-      const nextImage = getRandomImage(viewedImageIds);
-      if (nextImage) {
-        setImageHistory(prev => [...prev, nextImage]);
+      const newImage = getRandomImage(viewedImageIds);
+      if (newImage) {
+        setImageHistory(prev => [...prev, newImage]);
         setHistoryIndex(prev => prev + 1);
-        setCurrentImage(nextImage);
-        setIsLiked(nextImage.is_liked || false);
+        setCurrentImage(newImage);
+        setIsLiked(newImage.is_liked || false);
       }
     }
   };
 
+  // Preload next images and add to history
+  useEffect(() => {
+    if (!currentImage) return;
+    
+    // Ensure we always have at least 10 images ahead in history
+    const imagesAhead = imageHistory.length - (historyIndex + 1);
+    
+    if (imagesAhead < 10) {
+      const currentViewed = new Set(viewedImageIds);
+      const newImages: ImageWithTags[] = [];
+      const neededImages = 10 - imagesAhead;
+      
+      // Add existing images to viewed set
+      imageHistory.forEach(img => currentViewed.add(img.id));
+      
+      // Generate new random images
+      for (let i = 0; i < neededImages; i++) {
+        const randomImg = getRandomImage(currentViewed);
+        if (randomImg && !newImages.find(img => img.id === randomImg.id)) {
+          newImages.push(randomImg);
+          currentViewed.add(randomImg.id);
+        } else {
+          break;
+        }
+      }
+      
+      // Add new images to history
+      if (newImages.length > 0) {
+        setImageHistory(prev => [...prev, ...newImages]);
+      }
+    }
+    
+    // Update preloaded images for rendering
+    const preloads = getPreloadImages();
+    setPreloadedImages(preloads);
+  }, [currentImage, historyIndex, imageHistory]);
+
   // Navigate to previous image (swipe down)
   const goToPreviousImage = () => {
     if (historyIndex > 0) {
-      setIsImageLoading(true);
       const prevIndex = historyIndex - 1;
       const prevImg = imageHistory[prevIndex];
       setHistoryIndex(prevIndex);
@@ -151,7 +216,8 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     const imagesToPreload = imageHistory.slice(historyIndex + 1, historyIndex + 11);
     
     imagesToPreload.forEach((img) => {
-      const url = buildImageUrl(img.key, '');
+      const previewKey = getImageVariantKey(img.key, 'preview');
+      const url = buildImageUrl(previewKey, '');
       
       // Create native Image object to force browser caching
       const image = new window.Image();
@@ -270,32 +336,58 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
     
+    const currentY = e.touches[0].clientY;
+    const deltaY = touchStartRef.current.y - currentY;
+    
+    // Allow both upward (next) and downward (previous) swipes
+    setSlideOffset(-deltaY);
+    
     touchEndRef.current = {
       x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
+      y: currentY,
     };
   };
 
   const handleTouchEnd = () => {
-    if (!touchStartRef.current || !touchEndRef.current) return;
+    if (!touchStartRef.current || !touchEndRef.current) {
+      setSlideOffset(0);
+      return;
+    }
 
     const deltaY = touchStartRef.current.y - touchEndRef.current.y;
     const deltaX = Math.abs(touchEndRef.current.x - touchStartRef.current.x);
     
     // Must be more vertical than horizontal
     if (Math.abs(deltaY) <= deltaX) {
+      setSlideOffset(0);
       touchStartRef.current = null;
       touchEndRef.current = null;
       return;
     }
     
-    // Swipe up (minimum 80px) - Next image
+    // Swipe up (minimum 80px) - Next image with transition
     if (deltaY > 80) {
-      goToNextImage();
+      setIsTransitioning(true);
+      setSlideOffset(-window.innerHeight);
+      setTimeout(() => {
+        goToNextImage();
+        setSlideOffset(0);
+        setIsTransitioning(false);
+      }, 200);
     } 
-    // Swipe down (minimum 80px) - Previous image
-    else if (deltaY < -80) {
-      goToPreviousImage();
+    // Swipe down (minimum 80px) - Previous image with transition
+    else if (deltaY < -80 && historyIndex > 0) {
+      setIsTransitioning(true);
+      setSlideOffset(window.innerHeight);
+      setTimeout(() => {
+        goToPreviousImage();
+        setSlideOffset(0);
+        setIsTransitioning(false);
+      }, 200);
+    }
+    // Snap back if swipe was too short
+    else {
+      setSlideOffset(0);
     }
 
     touchStartRef.current = null;
@@ -309,7 +401,8 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(currentImage.filename)}`;
   const timestamp = currentImage.updated_at || currentImage.created_at;
-  const imageUrl = buildImageUrl(currentImage.key, fallback, timestamp);
+  const previewKey = getImageVariantKey(currentImage.key, 'preview');
+  const imageUrl = buildImageUrl(previewKey, fallback, timestamp);
   const displayName = currentImage.imagename || currentImage.filename;
 
   return (
@@ -345,7 +438,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
       </button>
 
       {/* Image Container */}
-      <div className="flex-1 flex items-center justify-center relative">
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden">
         {/* Loading Spinner */}
         {isImageLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
@@ -353,7 +446,14 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
           </div>
         )}
         
-        <div className="relative w-full h-full">
+        {/* Current Image */}
+        <div 
+          className="absolute inset-0 w-full h-full"
+          style={{
+            transform: `translateY(${slideOffset}px)`,
+            transition: isTransitioning ? 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+          }}
+        >
           <Image
             src={imageUrl}
             alt={displayName}
@@ -366,9 +466,60 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
           />
         </div>
 
+        {/* Preloaded Next 10 Images (stacked below) */}
+        {preloadedImages.map((img, index) => {
+          const previewKey = getImageVariantKey(img.key, 'preview');
+          const timestamp = img.updated_at || img.created_at;
+          const url = buildImageUrl(previewKey, '', timestamp);
+          
+          return (
+            <div 
+              key={img.id}
+              className="absolute inset-0 w-full h-full"
+              style={{
+                transform: `translateY(${slideOffset + window.innerHeight * (index + 1)}px)`,
+                transition: isTransitioning ? 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+              }}
+            >
+              <Image
+                src={url}
+                alt={img.imagename || img.filename}
+                fill
+                className="object-contain"
+                sizes="100vw"
+                quality={90}
+              />
+            </div>
+          );
+        })}
+
+        {/* Previous Image (preloaded above) */}
+        {historyIndex > 0 && imageHistory[historyIndex - 1] && (
+          <div 
+            className="absolute inset-0 w-full h-full"
+            style={{
+              transform: `translateY(${slideOffset - window.innerHeight}px)`,
+              transition: isTransitioning ? 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+            }}
+          >
+            <Image
+              src={buildImageUrl(
+                getImageVariantKey(imageHistory[historyIndex - 1].key, 'preview'),
+                '',
+                imageHistory[historyIndex - 1].updated_at || imageHistory[historyIndex - 1].created_at
+              )}
+              alt={imageHistory[historyIndex - 1].imagename || imageHistory[historyIndex - 1].filename}
+              fill
+              className="object-contain"
+              sizes="100vw"
+              quality={90}
+            />
+          </div>
+        )}
+
         {/* Double Tap Heart Animation */}
         {showHeartAnimation && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
             <Heart
               className={cn(
                 "w-32 h-32 text-white fill-white",

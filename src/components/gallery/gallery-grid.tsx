@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
+import { getImageVariantKey } from "@/lib/image-variants-utils";
 import { env } from "@/lib/env";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
@@ -133,6 +134,7 @@ function SortableImageCard({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isLiked, setIsLiked] = useState(image.is_liked || false);
   const [isLiking, setIsLiking] = useState(false);
+  const [variantFailed, setVariantFailed] = useState(false);
 
   // Prüfe ob Bild innerhalb der letzten Stunde hochgeladen wurde
   const canDeleteImage = () => {
@@ -175,6 +177,7 @@ function SortableImageCard({
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
+      // Always download original, not variant
       const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
       const response = await fetch(imageUrl);
       const blob = await response.blob();
@@ -231,7 +234,8 @@ function SortableImageCard({
 
   const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const imageUrl = getImageUrl(image.key, fallback, timestamp);
+  const gridKey = getImageVariantKey(image.key, 'grid');
+  const imageUrl = getImageUrl(gridKey, fallback, timestamp);
 
   return (
     <article
@@ -318,6 +322,7 @@ function SortableImageCard({
             alt={image.filename}
             fill
             draggable={false}
+            unoptimized // Disable Next.js optimization for better error handling
             className={cn(
               "object-cover transition-all duration-300 select-none pointer-events-none",
               imageLoaded ? "opacity-100 group-hover:scale-105" : "opacity-0"
@@ -328,6 +333,12 @@ function SortableImageCard({
             placeholder="blur"
             blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
             onLoad={() => setImageLoaded(true)}
+            onError={() => {
+              // Fallback to original if variant fails to load
+              if (!variantFailed) {
+                setVariantFailed(true);
+              }
+            }}
           />
           {isReordering ? (
             <div className="absolute inset-0 bg-black/20" />

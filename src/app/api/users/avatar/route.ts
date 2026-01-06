@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
         Key: uniqueKey,
         Body: buffer,
         ContentType: file.type,
+        CacheControl: 'public, max-age=31536000',
       })
     );
 

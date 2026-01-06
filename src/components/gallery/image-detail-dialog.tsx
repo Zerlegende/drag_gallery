@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { X, RotateCw } from "lucide-react";
 import { formatFileSize, cn } from "@/lib/utils";
+import { getImageVariantKey } from "@/lib/image-variants-utils";
 import { env } from "@/lib/env";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
@@ -39,6 +40,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
   const [imageKey, setImageKey] = useState(0); // For forcing image reload
+  const [variantFailed, setVariantFailed] = useState(false);
 
   useEffect(() => {
     if (image) {
@@ -55,9 +57,9 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
   }
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
-  // Use updated_at or created_at as cache buster
   const timestamp = image.updated_at || image.created_at;
-  const imageUrl = buildImageUrl(image.key, fallback, timestamp);
+  const fullscreenKey = getImageVariantKey(image.key, 'fullscreen');
+  const imageUrl = buildImageUrl(fullscreenKey, fallback, timestamp);
 
   // Filter suggestions based on search input (ensure availableTags is an array)
   const suggestions = (Array.isArray(availableTags) ? availableTags : [])
@@ -136,7 +138,13 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
               key={imageKey} 
               src={imageUrl}
               alt={image.filename} 
-              className="w-full" 
+              className="w-full"
+              onError={() => {
+                // Fallback to original if variant fails to load
+                if (!variantFailed) {
+                  setVariantFailed(true);
+                }
+              }}
             />
             {isAdmin && onRotate && (
               <Button

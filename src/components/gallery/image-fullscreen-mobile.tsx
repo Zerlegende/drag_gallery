@@ -6,6 +6,7 @@ import { X, MoreVertical, Heart, Download, Tag, ChevronLeft, ChevronRight } from
 import type { ImageWithTags, TagRecord } from "@/lib/db";
 import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
+import { getImageVariantKey } from "@/lib/image-variants-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -43,8 +44,7 @@ export function ImageFullscreenMobile({
   const [tagSearchInput, setTagSearchInput] = useState("");
   const [isLiked, setIsLiked] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
-  const [showArrows, setShowArrows] = useState(false);
-  const [arrowsShownThisSession, setArrowsShownThisSession] = useState(false);
+  const [showArrows, setShowArrows] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -137,21 +137,11 @@ export function ImageFullscreenMobile({
     }
   }, [image]);
 
-  // Show arrows on first view only (first image opened in this session)
+  // Show arrows whenever navigation is available
   useEffect(() => {
     if (!image || !onNavigate) return;
-    
-    // Only show arrows if they haven't been shown yet in this session
-    if (!arrowsShownThisSession && (hasPrev || hasNext)) {
-      setShowArrows(true);
-      setArrowsShownThisSession(true);
-    }
-  }, [image, onNavigate, hasPrev, hasNext, arrowsShownThisSession]);
-
-  // Hide arrows after interaction
-  const hideArrows = () => {
-    setShowArrows(false);
-  };
+    setShowArrows(hasPrev || hasNext);
+  }, [image, onNavigate, hasPrev, hasNext]);
 
   // Handle swipe navigation
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -199,11 +189,9 @@ export function ImageFullscreenMobile({
       if (deltaX > 0 && hasPrev) {
         console.log('⬅️ Navigating to PREVIOUS image');
         onNavigate('prev');
-        hideArrows();
       } else if (deltaX < 0 && hasNext) {
         console.log('➡️ Navigating to NEXT image');
         onNavigate('next');
-        hideArrows();
       } else {
         console.log('⚠️ Navigation blocked - hasPrev:', hasPrev, 'hasNext:', hasNext);
       }
@@ -224,7 +212,6 @@ export function ImageFullscreenMobile({
   const handleArrowClick = (direction: 'prev' | 'next') => {
     if (!onNavigate) return;
     onNavigate(direction);
-    hideArrows();
   };
 
   // Handle Like
@@ -255,6 +242,7 @@ export function ImageFullscreenMobile({
     if (!image) return;
     
     try {
+      // Always download original, not variant
       const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
       const response = await fetch(imageUrl);
       const blob = await response.blob();
@@ -299,7 +287,8 @@ export function ImageFullscreenMobile({
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const imageUrl = buildImageUrl(image.key, fallback, timestamp);
+  const previewKey = getImageVariantKey(image.key, 'preview');
+  const imageUrl = buildImageUrl(previewKey, fallback, timestamp);
   
   // Bildname: entweder imagename oder filename
   const displayName = image.imagename || image.filename;
@@ -541,10 +530,17 @@ export function ImageFullscreenMobile({
             src={imageUrl}
             alt={displayName}
             fill
+            unoptimized // Disable Next.js optimization for better error handling
             className="object-contain"
             sizes="100vw"
             quality={90}
             priority
+            onError={() => {
+              // Fallback to original if variant fails to load
+              if (!variantFailed) {
+                setVariantFailed(true);
+              }
+            }}
           />
         </div>
 

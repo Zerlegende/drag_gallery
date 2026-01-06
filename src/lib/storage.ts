@@ -36,6 +36,7 @@ export async function createPresignedUpload({
       Conditions: [["content-length-range", 0, maxSize], ["eq", "$Content-Type", contentType]],
       Fields: {
         "Content-Type": contentType,
+        "Cache-Control": "public, max-age=31536000",
       },
       Expires: expiresInSeconds,
     });
@@ -88,6 +89,7 @@ export async function putObject(key: string, body: Buffer, contentType: string) 
         Key: key,
         Body: body,
         ContentType: contentType,
+        CacheControl: 'public, max-age=31536000',
       })
     );
   });

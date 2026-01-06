@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { getImageById, upsertTags, withTransaction, updateImageName } from "@/lib/db";
 import { deleteObject } from "@/lib/storage";
+import { getImageVariantKey } from "@/lib/image-variants-utils";
 
 const patchSchema = z.object({
   tags: z.array(z.string()).optional(),
@@ -93,9 +94,24 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return new NextResponse("Forbidden: You can only delete your own images within 1 hour of upload", { status: 403 });
   }
 
-  // Lösche aus MinIO
+  // Lösche aus MinIO (Original + alle Varianten)
   try {
+    // Lösche Original
     await deleteObject(image.key);
+    
+    // Lösche alle Varianten
+    const variantSizes: ('grid' | 'preview' | 'fullscreen')[] = ['grid', 'preview', 'fullscreen'];
+    await Promise.all(
+      variantSizes.map(async (size) => {
+        try {
+          const variantKey = getImageVariantKey(image.key, size);
+          await deleteObject(variantKey);
+        } catch (error) {
+          console.error(`Failed to delete variant ${size}:`, error);
+          // Fahre fort, auch wenn eine Variante fehlt
+        }
+      })
+    );
   } catch (error) {
     console.error("Failed to delete from MinIO:", error);
     // Fahre fort, auch wenn MinIO-Löschung fehlschlägt

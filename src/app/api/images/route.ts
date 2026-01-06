@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { getImageById, getImagesWithTags, upsertTags, withTransaction } from "@/lib/db";
+import { generateImageVariants } from "@/lib/image-variants";
 
 const bodySchema = z.object({
   filename: z.string().min(1),
@@ -65,6 +66,12 @@ export async function POST(request: Request) {
 
     return id;
   });
+
+  // Generate image variants asynchronously (don't wait for completion)
+  // This happens in the background after the response is sent
+  generateImageVariants(parsed.data.key, parsed.data.mime ?? 'image/avif')
+    .then(() => console.log(`✅ Variants generated for image ${imageId}`))
+    .catch(err => console.error(`❌ Failed to generate variants for ${imageId}:`, err.message));
 
   const image = await getImageById(imageId);
   if (!image) {
