@@ -211,33 +211,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     }
   }, [historyIndex, imageHistory.length]);
 
-  // AGGRESSIVE PRELOADING: Force browser to cache next 10 images
-  useEffect(() => {
-    const imagesToPreload = imageHistory.slice(historyIndex + 1, historyIndex + 11);
-    
-    imagesToPreload.forEach((img) => {
-      const previewKey = getImageVariantKey(img.key, 'preview');
-      const url = buildImageUrl(previewKey, '');
-      
-      // Create native Image object to force browser caching
-      const image = new window.Image();
-      image.src = url;
-      
-      // Also add preload link to DOM
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = url;
-      link.fetchPriority = 'high';
-      document.head.appendChild(link);
-    });
-    
-    // Cleanup preload links when component unmounts
-    return () => {
-      const preloadLinks = document.querySelectorAll('link[rel="preload"][as="image"]');
-      preloadLinks.forEach(link => link.remove());
-    };
-  }, [historyIndex, imageHistory]);
+
 
   // Update like status when image changes - debounced
   useEffect(() => {
@@ -395,7 +369,6 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   };
 
   if (!currentImage) {
-    console.log('❌ InstaMode: No current image, rendering nothing');
     return null;
   }
 

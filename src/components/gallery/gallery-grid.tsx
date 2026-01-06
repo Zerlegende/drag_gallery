@@ -134,7 +134,6 @@ function SortableImageCard({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isLiked, setIsLiked] = useState(image.is_liked || false);
   const [isLiking, setIsLiking] = useState(false);
-  const [variantFailed, setVariantFailed] = useState(false);
 
   // Prüfe ob Bild innerhalb der letzten Stunde hochgeladen wurde
   const canDeleteImage = () => {
@@ -333,12 +332,6 @@ function SortableImageCard({
             placeholder="blur"
             blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
             onLoad={() => setImageLoaded(true)}
-            onError={() => {
-              // Fallback to original if variant fails to load
-              if (!variantFailed) {
-                setVariantFailed(true);
-              }
-            }}
           />
           {isReordering ? (
             <div className="absolute inset-0 bg-black/20" />

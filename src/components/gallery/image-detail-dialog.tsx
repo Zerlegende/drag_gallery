@@ -40,7 +40,6 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
   const [imageKey, setImageKey] = useState(0); // For forcing image reload
-  const [variantFailed, setVariantFailed] = useState(false);
 
   useEffect(() => {
     if (image) {
@@ -105,9 +104,6 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
         throw new Error(errorData.error || "Failed to rotate image");
       }
 
-      const result = await response.json();
-      console.log("Rotation successful:", result);
-      
       // Notify parent to refresh gallery - this will update the image object with new updated_at
       if (onRotate) {
         await onRotate(image.id);
@@ -139,12 +135,6 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
               src={imageUrl}
               alt={image.filename} 
               className="w-full"
-              onError={() => {
-                // Fallback to original if variant fails to load
-                if (!variantFailed) {
-                  setVariantFailed(true);
-                }
-              }}
             />
             {isAdmin && onRotate && (
               <Button

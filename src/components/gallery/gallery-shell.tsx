@@ -1,5 +1,4 @@
 "use client";
-
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import {
@@ -21,7 +20,6 @@ import {
 } from "@dnd-kit/sortable";
 import { useMutation } from "@tanstack/react-query";
 import { Trash2, Grid3x3, Grid2x2, LayoutGrid, Download, Heart, RotateCw } from "lucide-react";
-
 import { GalleryGrid } from "@/components/gallery/gallery-grid";
 import { TagFilter, type ImageSize } from "@/components/gallery/tag-filter";
 import type { SortOption } from "@/components/gallery/tag-filter";
@@ -40,13 +38,11 @@ import { formatFileSize } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useSidebar } from "@/components/sidebar-context";
 import { getImageSize, saveImageSize, getImagesPerPage, saveImagesPerPage, getSortOption, saveSortOption } from "@/lib/user-preferences";
-
 export type GalleryShellProps = {
   initialImages: ImageWithTags[];
   allTags: TagRecord[];
   initialFilter?: string[];
 };
-
 export function GalleryShell({ initialImages, allTags, initialFilter = [] }: GalleryShellProps) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
@@ -79,7 +75,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [dragVelocity, setDragVelocity] = useState({ x: 0, y: 0 });
   const lastDragPos = useRef({ x: 0, y: 0, time: 0 });
   const velocityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   // Track client-side mounting für DndContext und Mobile detection
   useEffect(() => {
     setIsMounted(true);
@@ -90,7 +85,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
   // Load rotation queue from server on mount
   useEffect(() => {
     if (!isMounted || images.length === 0) return;
@@ -123,13 +117,11 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     
     loadQueue();
   }, [isMounted, images.length]);
-
   // Save rotation queue to server whenever it changes
   useEffect(() => {
     // Don't sync to server during initial load
     if (!isMounted) return;
   }, [rotationQueue, isMounted]);
-
   // Auto-resume processing when there are pending items
   useEffect(() => {
     if (!isMounted) return;
@@ -142,7 +134,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       processRotationQueue(pendingItems);
     }
   }, [rotationQueue, isMounted]);
-
   // Lade imageSize und currentPage aus Cookie/SessionStorage nach Hydration
   useEffect(() => {
     setImageSize(getImageSize());
@@ -162,14 +153,12 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     prevFilterTags.current = filterTags;
     prevSearchTerm.current = searchTerm;
   }, []);
-
   // Speichere die aktuelle Seite im sessionStorage
   useEffect(() => {
     if (isMounted && hasLoadedPage.current) {
       sessionStorage.setItem('gallery-current-page', currentPage.toString());
     }
   }, [currentPage, isMounted]);
-
   // Zurück zur ersten Seite wenn Filter oder Suchbegriff geändert werden
   useEffect(() => {
     if (hasLoadedPage.current) {
@@ -185,31 +174,26 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     prevFilterTags.current = filterTags;
     prevSearchTerm.current = searchTerm;
   }, [filterTags, searchTerm]);
-
   // Wrapper-Funktion für imagesPerPage die auch in Cookie speichert
   const setImagesPerPage = (count: number) => {
     setImagesPerPageState(count);
     saveImagesPerPage(count);
     setCurrentPage(1); // Zurück zur ersten Seite bei Änderung
   };
-
   // Wrapper-Funktion für imageSize die auch in Cookie speichert
   const handleImageSizeChange = (size: ImageSize) => {
     setImageSize(size);
     saveImageSize(size);
   };
-
   // Wrapper-Funktion für sortOption die auch in Cookie speichert
   const handleSortChange = (sort: SortOption) => {
     setSortOption(sort);
     saveSortOption(sort);
   };
-
   // Wrapper-Funktion für imagesPerPage aus Select (nimmt String entgegen)
   const handleImagesPerPageChange = (value: string) => {
     setImagesPerPage(Number(value));
   };
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -223,7 +207,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       },
     })
   );
-
   const filteredImages = useMemo(() => {
     return images.filter((image) => {
       // Suche in Filename, Imagename und Tags
@@ -263,7 +246,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       return filterTags.every((tagId) => tagIds.has(tagId));
     });
   }, [filterTags, images, searchTerm]);
-
   // Sortiere die gefilterten Bilder
   const sortedImages = useMemo(() => {
     const sorted = [...filteredImages];
@@ -291,22 +273,15 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         return sorted;
     }
   }, [filteredImages, sortOption]);
-
   // Berechne sichtbare Bilder basierend auf aktueller Seite
   const visibleImages = useMemo(() => {
     const startIndex = (currentPage - 1) * imagesPerPage;
     const endIndex = startIndex + imagesPerPage;
     return sortedImages.slice(startIndex, endIndex);
   }, [sortedImages, currentPage, imagesPerPage]);
-
   const totalPages = Math.ceil(sortedImages.length / imagesPerPage);
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    
-    console.log('DragEnd - active:', active.id);
-    console.log('DragEnd - over:', over?.id, over?.data?.current);
-    console.log('DragEnd - draggedImagesRef:', draggedImagesRef.current);
     
     setActiveId(null);
     setDragVelocity({ x: 0, y: 0 });
@@ -321,16 +296,11 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       draggedImagesRef.current = [];
       return;
     }
-
     // Check if dropped on a container
     const overData = over.data.current;
-    console.log('DragEnd - overData type:', overData?.type);
     
     if (overData?.type === 'container') {
       const tagId = overData.tagId as string;
-      
-      console.log('DragEnd - Container drop detected, tagId:', tagId);
-      console.log('DragEnd - affectedImages:', draggedImagesRef.current);
       
       // Nutze die im Ref gespeicherten IDs (diese sind synchron)
       const affectedImageIds = draggedImagesRef.current;
@@ -350,7 +320,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         }
         
         const newTags = [...image.tags.map((t) => t.id), tagId];
-        console.log('DragEnd - Updating image:', imageId, 'with tags:', newTags);
         updateMutation.mutate({ id: imageId, tags: newTags, skipModalOpen: true });
         successCount++;
       }
@@ -371,7 +340,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     
     draggedImagesRef.current = [];
   };
-
   const updateMutation = useMutation({
     mutationFn: async (payload: { id: string; tags?: string[]; imagename?: string; skipModalOpen?: boolean }) => {
       const body: { tags?: string[]; imagename?: string } = {};
@@ -409,7 +377,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     },
     onError: (error: Error) => showToast("error", error.message),
   });
-
   const deleteMutation = useMutation({
     mutationFn: async (imageId: string) => {
       const res = await fetch(`/api/images/${imageId}`, {
@@ -427,7 +394,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     },
     onError: (error: Error) => showToast("error", error.message),
   });
-
   const bulkDeleteMutation = useMutation({
     mutationFn: async (imageIds: string[]) => {
       const results = await Promise.allSettled(
@@ -465,19 +431,15 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     },
     onError: (error: Error) => showToast("error", error.message),
   });
-
   const removeFilterTag = (tagId: string) => {
     setFilterTags((prev) => prev.filter((id) => id !== tagId));
   };
-
   const handleRemoveImageFromTag = async (imageId: string, tagId: string) => {
     const image = images.find((img) => img.id === imageId);
     if (!image) return;
-
     const newTags = image.tags.filter((tag) => tag.id !== tagId).map((tag) => tag.id);
     updateMutation.mutate({ id: imageId, tags: newTags, skipModalOpen: true });
   };
-
   const toggleImageSelection = (imageId: string) => {
     setSelectedImageIds((prev) => {
       const newSet = new Set(prev);
@@ -489,35 +451,28 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       return newSet;
     });
   };
-
   const selectAllImages = () => {
     setSelectedImageIds(new Set(sortedImages.map((img) => img.id)));
   };
-
   const deselectAllImages = () => {
     setSelectedImageIds(new Set());
   };
-
   const handleBulkDelete = () => {
     const count = selectedImageIds.size;
     if (count === 0) return;
     setShowBulkDeleteConfirm(true);
   };
-
   const confirmBulkDelete = () => {
     bulkDeleteMutation.mutate(Array.from(selectedImageIds));
   };
-
   const handleSingleDelete = (imageId: string) => {
     bulkDeleteMutation.mutate([imageId]);
   };
-
   // Bulk rotate function with queue
   const handleBulkRotate = async () => {
     const selectedImages = images.filter(img => selectedImageIds.has(img.id));
     
     if (selectedImages.length === 0) return;
-
     // Add to server queue
     try {
       const response = await fetch('/api/rotation-queue', {
@@ -528,12 +483,10 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           imageIds: selectedImages.map(img => img.id),
         }),
       });
-
       if (!response.ok) {
         showToast("error", "Fehler beim Hinzufügen zur Queue");
         return;
       }
-
       const data = await response.json();
       
       // Create new queue items for client
@@ -546,22 +499,18 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       // Add to existing queue
       setRotationQueue(prev => [...prev, ...newQueueItems]);
       setSelectedImageIds(new Set()); // Clear selection immediately
-
       // Process new items in background
       processRotationQueue(newQueueItems);
     } catch (error) {
       showToast("error", "Netzwerkfehler");
     }
   };
-
   const processRotationQueue = async (queue: QueueItem[]) => {
     if (isProcessingQueue.current) {
-      console.log("Queue is already being processed, skipping...");
       return; // Prevent double processing
     }
     
     isProcessingQueue.current = true;
-    console.log("Starting queue processing with", queue.length, "items");
     
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i];
@@ -582,11 +531,9 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             status: 'processing',
           }),
         });
-
         if (!updateResponse.ok) {
           const errorData = await updateResponse.json();
           if (errorData.error === "Already processing") {
-            console.log(`Image ${item.id} is already being processed elsewhere, skipping...`);
             continue;
           }
         }
@@ -598,14 +545,12 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       setRotationQueue(prev => 
         prev.map(q => q.id === item.id ? { ...q, status: "processing" } : q)
       );
-
       try {
         const response = await fetch(`/api/images/${item.id}/rotate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ degrees: 90 }),
         });
-
         if (response.ok) {
           // Update server
           await fetch('/api/rotation-queue', {
@@ -661,10 +606,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         );
       }
     }
-
-    console.log("Queue processing finished");
     isProcessingQueue.current = false;
-
     // Reload gallery after all rotations are done
     try {
       const res = await fetch('/api/images');
@@ -676,7 +618,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       console.error("Failed to reload images:", error);
     }
   };
-
   // Download functions
   const downloadImage = async (image: ImageWithTags) => {
     try {
@@ -696,20 +637,16 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       showToast("error", "Fehler beim Herunterladen des Bildes");
     }
   };
-
   const handleBulkDownload = async () => {
     const selectedImages = images.filter(img => selectedImageIds.has(img.id));
     
     if (selectedImages.length === 0) return;
-
     showToast("info", `Lade ${selectedImages.length} Bild(er) herunter...`);
-
     // If only one image, download directly
     if (selectedImages.length === 1) {
       await downloadImage(selectedImages[0]);
       return;
     }
-
     // For multiple images, download one by one with delay
     for (let i = 0; i < selectedImages.length; i++) {
       await downloadImage(selectedImages[i]);
@@ -718,15 +655,10 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
-
     showToast("success", `${selectedImages.length} Bild(er) erfolgreich heruntergeladen`);
   };
-
   const handleDragStart = (event: DragStartEvent) => {
     const draggedId = event.active.id as string;
-    
-    console.log('DragStart - draggedId:', draggedId);
-    console.log('DragStart - selectedImageIds:', Array.from(selectedImageIds));
     
     setActiveId(draggedId);
     
@@ -738,15 +670,12 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     if (selectedImageIds.has(draggedId) && selectedImageIds.size > 1) {
       // Multi-Drag: Behalte alle selections
       draggedImagesRef.current = Array.from(selectedImageIds);
-      console.log('DragStart - Multi-drag with:', draggedImagesRef.current);
     } else {
       // Single-Drag: Nur dieses Bild
       draggedImagesRef.current = [draggedId];
-      console.log('DragStart - Single-drag with:', draggedImagesRef.current);
       setSelectedImageIds(new Set([draggedId]));
     }
   };
-
   const handleDragMove = (event: DragMoveEvent) => {
     const { delta } = event;
     const now = Date.now();
@@ -772,7 +701,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     
     lastDragPos.current = { x: delta.x, y: delta.y, time: now };
   };
-
   const handleTagCreated = async () => {
     // Reload tags after creating a new one
     try {
@@ -785,7 +713,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       console.error("Failed to reload tags:", error);
     }
   };
-
   const handleTagDeleted = async () => {
     // Reload both tags and images after deleting a tag
     try {
@@ -795,7 +722,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         const tagsData = await tagsResponse.json();
         setAvailableTags(tagsData.tags);
       }
-
       // Reload images to update their tag assignments
       const imagesResponse = await fetch("/api/images");
       if (imagesResponse.ok) {
@@ -806,7 +732,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       console.error("Failed to reload data:", error);
     }
   };
-
   // Render gallery without DnD during SSR
   if (!isMounted) {
     return (
@@ -872,7 +797,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           </div>
         </div>
       )}
-
       <div className="flex flex-col gap-4 md:gap-6 md:flex-row md:items-end md:justify-between mt-4 md:mt-8">
         <div className="space-y-3 md:space-y-4 w-full">
           <div className="flex flex-col items-stretch gap-3">
@@ -907,7 +831,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               </Button>
             )}
           </div>
-
           {filterTags.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-muted-foreground">Aktive Filter:</span>
@@ -929,7 +852,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           )}
         </div>
       </div>
-
       <GalleryGrid
         images={visibleImages}
         onSelectImage={setSelectedImage}
@@ -941,7 +863,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         activeId={null}
         imageSize={imageSize}
       />
-
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 mt-8">
           <Button
@@ -986,7 +907,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               );
             })}
           </div>
-
           <Button
             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
             disabled={currentPage === totalPages}
@@ -1009,7 +929,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           </span>
         </div>
       )}
-
       {/* Desktop: Detail Dialog mit allen Funktionen */}
       {!isMobile && (
         <ImageDetailDialog
@@ -1034,45 +953,35 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           availableTags={allTags}
         />
       )}
-
       {/* Mobile: Einfache Vollbildansicht */}
       {isMobile && (
         <ImageFullscreenMobile
           image={selectedImage}
           onClose={() => {
-            console.log('🚪 onClose called in gallery-shell');
             setSelectedImage(null);
           }}
           availableTags={allTags}
           onSave={(id, data) => updateMutation.mutate({ id, ...data })}
           onNavigate={(direction) => {
-            console.log('🧭 onNavigate called:', direction, 'selectedImage:', selectedImage?.id);
             if (!selectedImage) {
-              console.log('⚠️ No selectedImage - aborting navigation');
               return;
             }
             const currentIndex = sortedImages.findIndex(img => img.id === selectedImage.id);
-            console.log('📍 Current index:', currentIndex, 'sortedImages.length:', sortedImages.length);
             if (currentIndex === -1) {
-              console.log('⚠️ Image not found in sortedImages - aborting');
               return;
             }
             
             const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
-            console.log('🎯 New index:', newIndex);
             if (newIndex >= 0 && newIndex < sortedImages.length) {
               const newImage = sortedImages[newIndex];
-              console.log('✅ Setting new image:', newImage.id, newImage.filename);
               setSelectedImage(newImage);
             } else {
-              console.log('⚠️ New index out of bounds');
             }
           }}
           hasPrev={selectedImage ? sortedImages.findIndex(img => img.id === selectedImage.id) > 0 : false}
           hasNext={selectedImage ? sortedImages.findIndex(img => img.id === selectedImage.id) < sortedImages.length - 1 : false}
         />
       )}
-
       <ConfirmDialog
         open={showBulkDeleteConfirm}
         onOpenChange={setShowBulkDeleteConfirm}
@@ -1083,7 +992,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         variant="destructive"
         onConfirm={confirmBulkDelete}
       />
-
       {/* Insta-Mode */}
       {showInstaMode && (
         <>
@@ -1091,13 +999,11 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           <InstaMode
             images={sortedImages}
             onClose={() => {
-              console.log('🚪 Closing InstaMode');
               setShowInstaMode(false);
             }}
           />
         </>
       )}
-
       {/* Rotation Queue */}
       <RotationQueue
         items={rotationQueue}
@@ -1114,7 +1020,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       </>
     );
   }
-
   // Render gallery with DnD after mounting on client (Desktop only)
   const galleryContent = (
     <div>
@@ -1206,7 +1111,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                 variant="outline"
                 className="w-full"
                 onClick={() => {
-                  console.log('🎬 Insta-Mode button clicked! Setting showInstaMode to true');
                   setShowInstaMode(true);
                 }}
               >
@@ -1244,7 +1148,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           ) : null}
         </div>
       </div>
-
       <div className="mt-8">
         <SortableContext items={visibleImages.map((image) => image.id)} strategy={rectSortingStrategy}>
           <GalleryGrid
@@ -1260,7 +1163,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             imageSize={imageSize}
           />
         </SortableContext>
-
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="mt-6 md:mt-8 mb-6 md:mb-8">
@@ -1293,7 +1195,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                 {sortedImages.length} Bilder gesamt
               </div>
             </div>
-
             {/* Desktop: Vollständige Version */}
             <div className="hidden md:flex justify-center items-center gap-2 flex-wrap">
               <Button
@@ -1338,7 +1239,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                   );
                 })}
               </div>
-
               <Button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
@@ -1363,7 +1263,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           </div>
         )}
       </div>
-
       {/* Desktop: Detail Dialog mit allen Funktionen */}
       {!isMobile && (
         <ImageDetailDialog
@@ -1388,45 +1287,35 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           availableTags={allTags}
         />
       )}
-
       {/* Mobile: Einfache Vollbildansicht */}
       {isMobile && (
         <ImageFullscreenMobile
           image={selectedImage}
           onClose={() => {
-            console.log('🚪 onClose called in gallery-shell (2nd location)');
             setSelectedImage(null);
           }}
           availableTags={allTags}
           onSave={(id, data) => updateMutation.mutate({ id, ...data })}
           onNavigate={(direction) => {
-            console.log('🧭 onNavigate called (2nd location):', direction, 'selectedImage:', selectedImage?.id);
             if (!selectedImage) {
-              console.log('⚠️ No selectedImage - aborting navigation');
               return;
             }
             const currentIndex = sortedImages.findIndex(img => img.id === selectedImage.id);
-            console.log('📍 Current index:', currentIndex, 'sortedImages.length:', sortedImages.length);
             if (currentIndex === -1) {
-              console.log('⚠️ Image not found in sortedImages - aborting');
               return;
             }
             
             const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
-            console.log('🎯 New index:', newIndex);
             if (newIndex >= 0 && newIndex < sortedImages.length) {
               const newImage = sortedImages[newIndex];
-              console.log('✅ Setting new image:', newImage.id, newImage.filename);
               setSelectedImage(newImage);
             } else {
-              console.log('⚠️ New index out of bounds');
             }
           }}
           hasPrev={selectedImage ? sortedImages.findIndex(img => img.id === selectedImage.id) > 0 : false}
           hasNext={selectedImage ? sortedImages.findIndex(img => img.id === selectedImage.id) < sortedImages.length - 1 : false}
         />
       )}
-
       <ConfirmDialog
         open={showBulkDeleteConfirm}
         onOpenChange={setShowBulkDeleteConfirm}
@@ -1437,7 +1326,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         variant="destructive"
         onConfirm={confirmBulkDelete}
       />
-
       {/* DragOverlay nur auf Desktop */}
       {!isMobile && (
         <DragOverlay dropAnimation={null} style={{ pointerEvents: 'none' }}>
@@ -1450,7 +1338,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           ) : null}
         </DragOverlay>
       )}
-
       {/* Insta-Mode */}
       {showInstaMode && (
         <>
@@ -1458,13 +1345,11 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           <InstaMode
             images={sortedImages}
             onClose={() => {
-              console.log('🚪 Closing InstaMode (2nd location)');
               setShowInstaMode(false);
             }}
           />
         </>
       )}
-
       {/* Rotation Queue */}
       <RotationQueue
         items={rotationQueue}
@@ -1480,7 +1365,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       />
       </div>
   );
-
   // Auf Desktop: Mit DndContext, auf Mobile: Ohne DndContext
   return isMobile ? galleryContent : (
     <DndContext 
@@ -1494,7 +1378,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     </DndContext>
   );
 }
-
 // Simple preview component for dragged images with physics
 function SimpleDragPreview({ 
   imageIds, 
@@ -1510,14 +1393,12 @@ function SimpleDragPreview({
   const draggedImages = images.filter(img => imageIds.includes(img.id));
   
   if (draggedImages.length === 0) return null;
-
   // Calculate wobble based on velocity
   const velocityMagnitude = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
   const wobbleIntensity = Math.min(velocityMagnitude / 10, 15); // Cap at 15 degrees
   const wobbleRotation = velocity.x > 0 ? wobbleIntensity : -wobbleIntensity;
   const baseRotation = -5;
   const totalRotation = baseRotation + wobbleRotation;
-
   return (
     <div style={{ 
       position: 'relative', 

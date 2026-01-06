@@ -66,14 +66,11 @@ export function ImageFullscreenMobile({
   useEffect(() => {
     if (!image) return;
 
-    console.log('🔗 Setting up history and popstate listener');
-    
     // Add hash to URL when opening (only once)
     window.history.pushState(null, "", "#image");
 
     // Listen for back button
     const handlePopState = () => {
-      console.log('⬅️ Browser back button pressed');
       onClose();
     };
 
@@ -81,11 +78,9 @@ export function ImageFullscreenMobile({
 
     // Cleanup: remove listener and reset URL (only on unmount)
     return () => {
-      console.log('🧹 Cleanup: removing popstate listener');
       window.removeEventListener("popstate", handlePopState);
       // Only remove hash if we're still on the image view
       if (window.location.hash === "#image") {
-        console.log('🔙 Calling history.back() in cleanup');
         window.history.back();
       }
     };
@@ -146,7 +141,6 @@ export function ImageFullscreenMobile({
   // Handle swipe navigation
   const handleTouchStart = (e: React.TouchEvent) => {
     if (!onNavigate) return;
-    console.log('🟢 TouchStart:', { x: e.touches[0].clientX, y: e.touches[0].clientY });
     isSwipingRef.current = false;
     touchStartRef.current = {
       x: e.touches[0].clientX,
@@ -164,9 +158,7 @@ export function ImageFullscreenMobile({
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    console.log('🔴 TouchEnd called');
     if (!onNavigate || !touchStartRef.current || !touchEndRef.current) {
-      console.log('⚠️ Early return:', { onNavigate: !!onNavigate, touchStart: !!touchStartRef.current, touchEnd: !!touchEndRef.current });
       touchStartRef.current = null;
       touchEndRef.current = null;
       return;
@@ -187,22 +179,16 @@ export function ImageFullscreenMobile({
       isSwipingRef.current = true; // Mark as swiping to prevent onClick
       
       if (deltaX > 0 && hasPrev) {
-        console.log('⬅️ Navigating to PREVIOUS image');
         onNavigate('prev');
       } else if (deltaX < 0 && hasNext) {
-        console.log('➡️ Navigating to NEXT image');
         onNavigate('next');
-      } else {
-        console.log('⚠️ Navigation blocked - hasPrev:', hasPrev, 'hasNext:', hasNext);
       }
       
       // Reset swiping flag after a delay to prevent click events
       setTimeout(() => {
-        console.log('⏰ Resetting isSwipingRef to false (after 500ms)');
         isSwipingRef.current = false;
       }, 500);
     } else {
-      console.log('❌ Swipe too small or vertical - ignored');
     }
 
     touchStartRef.current = null;
@@ -535,12 +521,6 @@ export function ImageFullscreenMobile({
             sizes="100vw"
             quality={90}
             priority
-            onError={() => {
-              // Fallback to original if variant fails to load
-              if (!variantFailed) {
-                setVariantFailed(true);
-              }
-            }}
           />
         </div>
 
