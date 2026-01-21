@@ -71,7 +71,7 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
         );
         if (tooManyFiles) {
           setError('Maximal 50 Bilder auf einmal hochladen');
-          showToast('Maximal 50 Bilder auf einmal hochladen', 'error');
+          showToast('error', 'Maximal 50 Bilder auf einmal hochladen');
           return;
         }
       }
@@ -79,7 +79,7 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
       const totalFiles = queuedFiles.length + acceptedFiles.length;
       if (totalFiles > 50) {
         setError('Maximal 50 Bilder auf einmal hochladen');
-        showToast('Maximal 50 Bilder auf einmal hochladen', 'error');
+        showToast('error', 'Maximal 50 Bilder auf einmal hochladen');
         return;
       }
 
