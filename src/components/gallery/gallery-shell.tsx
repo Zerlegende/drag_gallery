@@ -28,6 +28,7 @@ import { ImageFullscreenMobile } from "@/components/gallery/image-fullscreen-mob
 import { InstaMode } from "@/components/gallery/insta-mode";
 import { ContainerPanel } from "@/components/gallery/container-panel";
 import { RotationQueue, type QueueItem } from "@/components/gallery/rotation-queue";
+import { ProcessingStatusIndicator } from "@/components/gallery/processing-status-indicator";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -1363,6 +1364,9 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           );
         }}
       />
+
+      {/* Processing Status Indicator */}
+      <ProcessingStatusIndicator />
       </div>
   );
   // Auf Desktop: Mit DndContext, auf Mobile: Ohne DndContext

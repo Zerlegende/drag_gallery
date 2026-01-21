@@ -23,6 +23,7 @@ export type ImageRecord = {
   created_at: string;
   updated_at?: string;
   position: number;
+  variant_status?: string; // 'pending', 'processing', 'completed', 'failed'
   liked_count?: number; // Count of likes (from JOIN)
   is_liked?: boolean;   // Whether current user liked it (from JOIN)
 };
@@ -204,3 +205,11 @@ export async function updateImageSize(imageId: string, size: number) {
     await query(sql, [size, imageId]);
   });
 }
+
+export async function updateImageTimestamp(imageId: string) {
+  return withDatabaseRetry(async () => {
+    const sql = `UPDATE images SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`;
+    await query(sql, [imageId]);
+  });
+}
+

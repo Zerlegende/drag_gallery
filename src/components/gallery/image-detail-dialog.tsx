@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { X, RotateCw } from "lucide-react";
+import { X, RotateCw, Settings } from "lucide-react";
+import Link from "next/link";
 import { formatFileSize, cn } from "@/lib/utils";
 import { getImageVariantKey } from "@/lib/image-variants-utils";
 import { env } from "@/lib/env";
@@ -136,16 +137,28 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
               alt={image.filename} 
               className="w-full"
             />
-            {isAdmin && onRotate && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleRotate}
-                disabled={isRotating}
-                className="absolute top-2 right-2"
-              >
-                <RotateCw className={cn("h-4 w-4", isRotating && "animate-spin")} />
-              </Button>
+            {isAdmin && (
+              <div className="absolute top-2 right-2 flex gap-2">
+                {onRotate && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRotate}
+                    disabled={isRotating}
+                  >
+                    <RotateCw className={cn("h-4 w-4", isRotating && "animate-spin")} />
+                  </Button>
+                )}
+                <Link href={`/admin/images/${image.id}/variants`}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    title="Varianten verwalten"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             )}
           </div>
           <div className="space-y-2">

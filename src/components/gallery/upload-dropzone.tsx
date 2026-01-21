@@ -63,7 +63,26 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
   }, [initialFiles, initialFilesProcessed]);
 
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
+    (acceptedFiles: File[], rejectedFiles: any[]) => {
+      // Check for file limit violations
+      if (rejectedFiles.length > 0) {
+        const tooManyFiles = rejectedFiles.some(rejection => 
+          rejection.errors.some((e: any) => e.code === 'too-many-files')
+        );
+        if (tooManyFiles) {
+          setError('Maximal 50 Bilder auf einmal hochladen');
+          showToast('Maximal 50 Bilder auf einmal hochladen', 'error');
+          return;
+        }
+      }
+
+      const totalFiles = queuedFiles.length + acceptedFiles.length;
+      if (totalFiles > 50) {
+        setError('Maximal 50 Bilder auf einmal hochladen');
+        showToast('Maximal 50 Bilder auf einmal hochladen', 'error');
+        return;
+      }
+
       const filesWithPreviews = acceptedFiles.map((file) => ({
         file,
         preview: URL.createObjectURL(file),
@@ -72,7 +91,7 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
       setQueuedFiles((prev) => [...prev, ...filesWithPreviews]);
       setError(null);
     },
-    [],
+    [queuedFiles.length, showToast],
   );
 
   // Cleanup previews on unmount
@@ -85,6 +104,7 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
+    maxFiles: 50,
     accept: {
       "image/jpeg": [".jpg", ".jpeg"],
       "image/png": [".png"],

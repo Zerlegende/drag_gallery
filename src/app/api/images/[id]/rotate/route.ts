@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { getImageById, updateImageSize } from "@/lib/db";
 import { getObject, putObject } from "@/lib/storage";
 import { auth } from "@/lib/auth";
+import { getImageVariantKey, VARIANT_SIZES } from "@/lib/image-variants-utils";
 
 export async function POST(
   request: NextRequest,
@@ -111,6 +112,49 @@ export async function POST(
       image.mime || "image/jpeg"
     );
     console.log(`✅ Upload complete`);
+
+    // Rotate and upload all variants (@300, @800, @1600)
+    console.log(`🔄 Rotating variants...`);
+    const variantSizes: ('grid' | 'preview' | 'fullscreen')[] = ['grid', 'preview', 'fullscreen'];
+    
+    await Promise.all(
+      variantSizes.map(async (size) => {
+        try {
+          const variantKey = getImageVariantKey(image.key, size);
+          const targetWidth = VARIANT_SIZES[size];
+          
+          // Download existing variant
+          const variantStream = await getObject(variantKey);
+          if (!variantStream) {
+            console.log(`⚠️ Variant ${size} not found, skipping`);
+            return;
+          }
+          
+          const variantChunks: Uint8Array[] = [];
+          for await (const chunk of variantStream as any) {
+            variantChunks.push(chunk);
+          }
+          const variantBuffer = Buffer.concat(variantChunks);
+          
+          // Rotate variant
+          const rotatedVariant = await sharp(variantBuffer)
+            .rotate(degrees)
+            .resize(targetWidth, targetWidth, {
+              fit: 'inside',
+              withoutEnlargement: true
+            })
+            .avif({ quality: 80, effort: 4 })
+            .toBuffer();
+          
+          // Upload rotated variant
+          await putObject(variantKey, rotatedVariant, 'image/avif');
+          console.log(`✅ Rotated variant ${size} (${targetWidth}px)`);
+        } catch (error) {
+          console.error(`❌ Failed to rotate variant ${size}:`, error);
+          // Continue with other variants even if one fails
+        }
+      })
+    );
 
     // Update size in database (might have changed slightly due to rotation)
     console.log(`💾 Updating size in database...`);

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { getImageById, getImagesWithTags, upsertTags, withTransaction } from "@/lib/db";
-import { generateImageVariants } from "@/lib/image-variants";
+import { variantQueue } from "@/lib/variant-queue";
 
 const bodySchema = z.object({
   filename: z.string().min(1),
@@ -40,10 +40,10 @@ export async function POST(request: Request) {
 
     await client.query(
       `
-        INSERT INTO images (id, filename, key, mime, size, uploaded_by, position)
+        INSERT INTO images (id, filename, key, mime, size, uploaded_by, position, variant_status)
         VALUES ($1, $2, $3, $4, $5, $6, (
           SELECT COALESCE(MAX(position) + 1, 0) FROM images
-        ))
+        ), 'pending')
       `,
       [
         id,
@@ -67,11 +67,8 @@ export async function POST(request: Request) {
     return id;
   });
 
-  // Generate image variants asynchronously (don't wait for completion)
-  // This happens in the background after the response is sent
-  generateImageVariants(parsed.data.key, parsed.data.mime ?? 'image/avif')
-    .then(() => console.log(`✅ Variants generated for image ${imageId}`))
-    .catch(err => console.error(`❌ Failed to generate variants for ${imageId}:`, err.message));
+  // Add to variant processing queue (max 2 concurrent)
+  variantQueue.add(imageId, parsed.data.key, parsed.data.mime ?? 'image/avif');
 
   const image = await getImageById(imageId);
   if (!image) {

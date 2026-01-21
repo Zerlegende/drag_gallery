@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS images (
   height INT,
   uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
   position INT DEFAULT 0,
+  variant_status VARCHAR(20) DEFAULT 'pending',
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMP
 );
@@ -47,6 +48,8 @@ CREATE TABLE IF NOT EXISTS image_tags (
 -- Indizes für Performance
 CREATE INDEX IF NOT EXISTS idx_images_uploaded_by ON images(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_images_position ON images(position);
+CREATE INDEX IF NOT EXISTS idx_images_variant_status ON images(variant_status);
+CREATE INDEX IF NOT EXISTS idx_images_uploaded_by_status ON images(uploaded_by, variant_status);
 CREATE INDEX IF NOT EXISTS idx_image_tags_image_id ON image_tags(image_id);
 CREATE INDEX IF NOT EXISTS idx_image_tags_tag_id ON image_tags(tag_id);
 
