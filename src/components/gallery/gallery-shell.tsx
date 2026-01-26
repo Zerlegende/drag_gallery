@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import {
   DndContext,
@@ -75,10 +75,11 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const prevFilterTags = useRef<string[]>(initialFilter);
   const prevSearchTerm = useRef("");
   
-  // Physics state for drag animation
-  const [dragVelocity, setDragVelocity] = useState({ x: 0, y: 0 });
+  // Physics state for drag animation - use ref to avoid re-renders
+  const dragVelocityRef = useRef({ x: 0, y: 0 });
   const lastDragPos = useRef({ x: 0, y: 0, time: 0 });
-  const velocityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dragOverlayRef = useRef<HTMLDivElement | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   // Track client-side mounting für DndContext und Mobile detection
   useEffect(() => {
     setIsMounted(true);
@@ -300,12 +301,12 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     const { active, over } = event;
     
     setActiveId(null);
-    setDragVelocity({ x: 0, y: 0 });
+    dragVelocityRef.current = { x: 0, y: 0 };
     
-    // Clear velocity timeout
-    if (velocityTimeoutRef.current) {
-      clearTimeout(velocityTimeoutRef.current);
-      velocityTimeoutRef.current = null;
+    // Cancel any pending animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
     
     if (!over) {
@@ -680,7 +681,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     
     // Reset velocity tracking
     lastDragPos.current = { x: 0, y: 0, time: Date.now() };
-    setDragVelocity({ x: 0, y: 0 });
+    dragVelocityRef.current = { x: 0, y: 0 };
     
     // Wenn das gezogene Bild in der Auswahl ist, alle ausgewählten Bilder merken
     if (selectedImageIds.has(draggedId) && selectedImageIds.size > 1) {
@@ -702,17 +703,25 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       const velocityX = (delta.x - lastDragPos.current.x) / timeDelta;
       const velocityY = (delta.y - lastDragPos.current.y) / timeDelta;
       
-      setDragVelocity({ x: velocityX * 100, y: velocityY * 100 }); // Scale up for visibility
+      // Update ref directly without causing re-render
+      dragVelocityRef.current = { x: velocityX * 100, y: velocityY * 100 };
       
-      // Clear previous timeout
-      if (velocityTimeoutRef.current) {
-        clearTimeout(velocityTimeoutRef.current);
+      // Update rotation via DOM directly for performance
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
-      
-      // Reset velocity after a short delay if no movement
-      velocityTimeoutRef.current = setTimeout(() => {
-        setDragVelocity({ x: 0, y: 0 });
-      }, 100);
+      animationFrameRef.current = requestAnimationFrame(() => {
+        if (dragOverlayRef.current) {
+          const velocityMagnitude = Math.sqrt(
+            dragVelocityRef.current.x * dragVelocityRef.current.x + 
+            dragVelocityRef.current.y * dragVelocityRef.current.y
+          );
+          const wobbleIntensity = Math.min(velocityMagnitude / 10, 12);
+          const wobbleRotation = dragVelocityRef.current.x > 0 ? wobbleIntensity : -wobbleIntensity;
+          const totalRotation = -5 + wobbleRotation;
+          dragOverlayRef.current.style.transform = `rotate(${totalRotation}deg)`;
+        }
+      });
     }
     
     lastDragPos.current = { x: delta.x, y: delta.y, time: now };
@@ -1355,9 +1364,9 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         <DragOverlay dropAnimation={null} style={{ pointerEvents: 'none' }}>
           {activeId ? (
             <SimpleDragPreview 
+              ref={dragOverlayRef}
               imageIds={draggedImagesRef.current} 
               images={displayImages}
-              velocity={dragVelocity}
               demoMode={isDemoMode}
             />
           ) : null}
@@ -1403,36 +1412,35 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     </DndContext>
   );
 }
-// Simple preview component for dragged images with physics
-function SimpleDragPreview({ 
-  imageIds, 
-  images, 
-  velocity,
-  demoMode = false
-}: { 
-  imageIds: string[]; 
-  images: ImageWithTags[];
-  velocity: { x: number; y: number };
-  demoMode?: boolean;
-}) {
+// Simple preview component for dragged images with physics - optimized with forwardRef
+const SimpleDragPreview = React.forwardRef<
+  HTMLDivElement,
+  { 
+    imageIds: string[]; 
+    images: ImageWithTags[];
+    demoMode?: boolean;
+  }
+>(function SimpleDragPreview({ imageIds, images, demoMode = false }, ref) {
   const BASE_URL = process.env.NEXT_PUBLIC_MINIO_BASE_URL;
   
-  const draggedImages = images.filter(img => imageIds.includes(img.id));
+  // Memoize filtered images to avoid recalculation
+  const draggedImages = useMemo(
+    () => images.filter(img => imageIds.includes(img.id)),
+    [images, imageIds]
+  );
   
   if (draggedImages.length === 0) return null;
-  // Calculate wobble based on velocity
-  const velocityMagnitude = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-  const wobbleIntensity = Math.min(velocityMagnitude / 10, 15); // Cap at 15 degrees
-  const wobbleRotation = velocity.x > 0 ? wobbleIntensity : -wobbleIntensity;
-  const baseRotation = -5;
-  const totalRotation = baseRotation + wobbleRotation;
+  
   return (
-    <div style={{ 
-      position: 'relative', 
-      transform: `rotate(${totalRotation}deg)`, 
-      pointerEvents: 'none',
-      transition: 'transform 0.1s ease-out'
-    }}>
+    <div 
+      ref={ref}
+      style={{ 
+        position: 'relative', 
+        transform: 'rotate(-5deg)', 
+        pointerEvents: 'none',
+        willChange: 'transform',
+      }}
+    >
       {draggedImages.map((image, index) => {
         const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
         const imageIndex = images.indexOf(image);
@@ -1451,9 +1459,11 @@ function SimpleDragPreview({
             className="rounded-xl border-2 border-primary bg-card shadow-2xl overflow-hidden absolute top-0 left-0"
             style={{
               width: '200px',
-              transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
+              transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale}) translateZ(0)`,
               opacity: 0.95 - (index * 0.1),
               zIndex: draggedImages.length - index,
+              willChange: 'transform',
+              backfaceVisibility: 'hidden',
             }}
           >
             <div className="relative aspect-[4/3]">
@@ -1461,6 +1471,8 @@ function SimpleDragPreview({
                 src={imageUrl}
                 alt={image.filename}
                 className="w-full h-full object-cover"
+                loading="eager"
+                decoding="async"
               />
             </div>
             <div className="p-2 bg-card">
@@ -1479,4 +1491,4 @@ function SimpleDragPreview({
       )}
     </div>
   );
-}
+});
