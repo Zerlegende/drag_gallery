@@ -30,8 +30,6 @@ export async function generateImageVariants(
     throw new Error(`Original image is empty: ${originalKey}`);
   }
 
-  console.log(`📥 Downloaded original: ${(originalBuffer.length / 1024 / 1024).toFixed(2)} MB`);
-
   const variants: Record<string, string> = {};
   const uploadPromises = Object.entries(VARIANT_SIZES).map(async ([name, width]) => {
     const variantKey = getVariantKey(originalKey, width);
@@ -45,10 +43,6 @@ export async function generateImageVariants(
       .toBuffer();
 
     await putObject(variantKey, resizedBuffer, 'image/avif');
-    
-    console.log(
-      `  ✓ ${name} (${width}px): ${variantKey} - ${(resizedBuffer.length / 1024).toFixed(1)} KB`
-    );
     
     variants[name] = variantKey;
   });

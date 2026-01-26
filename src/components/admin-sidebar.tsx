@@ -16,12 +16,15 @@ import {
   Menu,
   Heart,
   Upload,
-  X
+  X,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/sidebar-context";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { getDemoMode, saveDemoMode } from "@/lib/user-preferences";
 
 export function AdminSidebar() {
   const { data: session, status } = useSession();
@@ -30,10 +33,26 @@ export function AdminSidebar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
   const { showToast } = useToast();
   
   // Nur für Admins anzeigen
   const isAdmin = session?.user && (session.user as any).role === 'admin';
+
+  // Load demo mode state on mount
+  useEffect(() => {
+    if (isAdmin) {
+      setDemoMode(getDemoMode());
+    }
+  }, [isAdmin]);
+
+  const toggleDemoMode = () => {
+    const newMode = !demoMode;
+    setDemoMode(newMode);
+    saveDemoMode(newMode);
+    // Reload page to apply demo mode
+    window.location.reload();
+  };
 
   // Während des Ladens nichts anzeigen
   if (status === "loading") {
@@ -165,6 +184,26 @@ export function AdminSidebar() {
               </Link>
             );
           })}
+
+          {/* Demo Mode Toggle - Only for Admins */}
+          {isAdmin && (
+            <button
+              onClick={toggleDemoMode}
+              className={cn(
+                "w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                demoMode
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                !(mobileMenuOpen || !leftSidebarCollapsed) && "justify-center"
+              )}
+              title={(mobileMenuOpen || !leftSidebarCollapsed) ? undefined : (demoMode ? "Demo-Modus aktiv" : "Demo-Modus")}
+            >
+              {demoMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {(mobileMenuOpen || !leftSidebarCollapsed) && (
+                <span>{demoMode ? "Demo-Modus" : "Live-Modus"}</span>
+              )}
+            </button>
+          )}
         </nav>
 
         {/* Footer: User Info + Logout */}

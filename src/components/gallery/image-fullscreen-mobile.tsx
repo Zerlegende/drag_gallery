@@ -6,18 +6,12 @@ import { X, MoreVertical, Heart, Download, Tag, ChevronLeft, ChevronRight } from
 import type { ImageWithTags, TagRecord } from "@/lib/db";
 import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
-import { getImageVariantKey } from "@/lib/image-variants-utils";
+import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
-
-function buildImageUrl(key: string, fallback: string, timestamp?: string) {
-  if (!BASE_URL) return fallback;
-  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
-  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
-}
 
 export type ImageFullscreenMobileProps = {
   image: ImageWithTags | null;
@@ -79,9 +73,9 @@ export function ImageFullscreenMobile({
     // Cleanup: remove listener and reset URL (only on unmount)
     return () => {
       window.removeEventListener("popstate", handlePopState);
-      // Only remove hash if we're still on the image view
+      // Remove hash from URL without navigating back
       if (window.location.hash === "#image") {
-        window.history.back();
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,12 +161,9 @@ export function ImageFullscreenMobile({
     const deltaX = touchEndRef.current.x - touchStartRef.current.x;
     const deltaY = Math.abs(touchEndRef.current.y - touchStartRef.current.y);
     
-    console.log('📊 Swipe delta:', { deltaX, deltaY, absDeltaX: Math.abs(deltaX) });
     
     // Only trigger if horizontal swipe is dominant (not vertical scroll) and minimum distance
     if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > deltaY) {
-      console.log('✅ Valid swipe detected! Direction:', deltaX > 0 ? 'RIGHT (prev)' : 'LEFT (next)');
-      console.log('🛡️ Setting isSwipingRef to true');
       
       e.preventDefault(); // Prevent the synthetic click event
       e.stopPropagation(); // Stop event bubbling
@@ -267,14 +258,13 @@ export function ImageFullscreenMobile({
   };
 
   if (!image) {
-    console.log('❌ Image is null - component will unmount');
     return null;
   }
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
   const previewKey = getImageVariantKey(image.key, 'preview');
-  const imageUrl = buildImageUrl(previewKey, fallback, timestamp);
+  const imageUrl = buildImageUrl(BASE_URL, previewKey, fallback, timestamp);
   
   // Bildname: entweder imagename oder filename
   const displayName = image.imagename || image.filename;
@@ -295,13 +285,10 @@ export function ImageFullscreenMobile({
         "animate-in fade-in duration-200"
       )}
       onClick={(e) => {
-        console.log('🖱️ Background onClick fired! isSwipingRef:', isSwipingRef.current, 'showTagEditor:', showTagEditor);
         // Don't close if we just finished swiping or if tag editor is open
         if (!showTagEditor && !isSwipingRef.current) {
-          console.log('🚪 Closing view from background click');
           onClose();
         } else {
-          console.log('🚫 Close prevented - swipe or tag editor active');
         }
       }}
     >

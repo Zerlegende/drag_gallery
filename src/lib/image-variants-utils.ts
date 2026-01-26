@@ -20,22 +20,6 @@ export function getVariantKey(originalKey: string, width: number): string {
 }
 
 /**
- * Parse variant key back to original and size
- * Example: "user/photo@300.avif" -> { originalKey: "user/photo.avif", width: 300 }
- */
-export function parseVariantKey(variantKey: string): { originalKey: string; width: number | null } {
-  const match = variantKey.match(/^(.+)@(\d+)\.([^.]+)$/);
-  if (match) {
-    const [, basePath, widthStr, ext] = match;
-    return {
-      originalKey: `${basePath}.${ext}`,
-      width: parseInt(widthStr, 10),
-    };
-  }
-  return { originalKey: variantKey, width: null };
-}
-
-/**
  * Get the appropriate variant key for a given context
  */
 export function getImageVariantKey(
@@ -48,4 +32,19 @@ export function getImageVariantKey(
   
   const width = VARIANT_SIZES[variant];
   return getVariantKey(originalKey, width);
+}
+
+/**
+ * Build a full image URL from key with optional cache-busting timestamp
+ * Centralized utility to avoid duplication across components
+ */
+export function buildImageUrl(
+  baseUrl: string | undefined,
+  key: string,
+  fallback: string,
+  timestamp?: string
+): string {
+  if (!baseUrl) return fallback;
+  const url = `${baseUrl.replace(/\/$/, "")}/${key}`;
+  return timestamp ? `${url}?t=${timestamp}` : url;
 }

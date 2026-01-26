@@ -11,17 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { X, RotateCw, Settings } from "lucide-react";
 import Link from "next/link";
 import { formatFileSize, cn } from "@/lib/utils";
-import { getImageVariantKey } from "@/lib/image-variants-utils";
+import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
 import { env } from "@/lib/env";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
-
-function buildImageUrl(key: string, fallback: string, timestamp?: string) {
-  if (!BASE_URL) return fallback;
-  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
-  // Add cache busting timestamp if provided
-  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
-}
 
 export type ImageDetailDialogProps = {
   image: ImageWithTags | null;
@@ -52,6 +45,30 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
     }
   }, [image]);
 
+  // Handle browser back button / gesture navigation
+  useEffect(() => {
+    if (!image) return;
+
+    // Add hash to URL when opening
+    window.history.pushState(null, "", "#detail");
+
+    // Listen for back button
+    const handlePopState = () => {
+      onOpenChange(false);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    // Cleanup: remove listener and reset URL
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // Remove hash from URL without navigating back
+      if (window.location.hash === "#detail") {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    };
+  }, [image, onOpenChange]);
+
   if (!image) {
     return null;
   }
@@ -59,7 +76,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
   const fullscreenKey = getImageVariantKey(image.key, 'fullscreen');
-  const imageUrl = buildImageUrl(fullscreenKey, fallback, timestamp);
+  const imageUrl = buildImageUrl(BASE_URL, fullscreenKey, fallback, timestamp);
 
   // Filter suggestions based on search input (ensure availableTags is an array)
   const suggestions = (Array.isArray(availableTags) ? availableTags : [])

@@ -9,14 +9,9 @@ import { env } from "@/lib/env";
 import { Badge } from "@/components/ui/badge";
 import { ImageDetailDialog } from "@/components/gallery/image-detail-dialog";
 import { ImageFullscreenMobile } from "@/components/gallery/image-fullscreen-mobile";
+import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
-
-function getImageUrl(key: string, fallback: string, timestamp?: string) {
-  if (!BASE_URL) return fallback;
-  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
-  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
-}
 
 type LikedGalleryViewProps = {
   images: ImageWithTags[];
@@ -220,7 +215,8 @@ function LikedImageCard({ image, onSelect, onUnlike }: LikedImageCardProps) {
 
   const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const imageUrl = getImageUrl(image.key, fallback, timestamp);
+  const gridVariantKey = getImageVariantKey(image.key, 'grid');
+  const imageUrl = buildImageUrl(BASE_URL, gridVariantKey, fallback, timestamp);
 
   return (
     <article

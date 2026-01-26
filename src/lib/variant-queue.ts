@@ -20,7 +20,6 @@ class VariantQueue {
   async add(imageId: string, key: string, mime: string) {
     const item: QueueItem = { imageId, key, mime };
     this.queue.push(item);
-    console.log(`📥 Added to queue: ${imageId} (queue length: ${this.queue.length})`);
     
     // Start processing if below concurrency limit
     this.processNext();
@@ -36,7 +35,6 @@ class VariantQueue {
     if (!item) return;
 
     this.processing++;
-    console.log(`⚙️ Processing started: ${item.imageId} (${this.processing}/${this.maxConcurrent} slots used, ${this.queue.length} in queue)`);
 
     try {
       // Update status to processing
@@ -53,10 +51,8 @@ class VariantQueue {
         'UPDATE images SET variant_status = $1 WHERE id = $2',
         ['completed', item.imageId]
       );
-
-      console.log(`✅ Processing completed: ${item.imageId}`);
     } catch (error) {
-      console.error(`❌ Processing failed: ${item.imageId}`, error);
+      console.error(`Processing failed: ${item.imageId}`, error);
       
       // Update status to failed
       await query(
@@ -65,7 +61,6 @@ class VariantQueue {
       ).catch(err => console.error('Failed to update error status:', err));
     } finally {
       this.processing--;
-      console.log(`🔄 Slot freed (${this.processing}/${this.maxConcurrent} slots used, ${this.queue.length} in queue)`);
       
       // Process next item in queue
       this.processNext();

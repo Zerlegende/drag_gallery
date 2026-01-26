@@ -13,17 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
-import { getImageVariantKey } from "@/lib/image-variants-utils";
+import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
+import { getDemoImageUrl } from "@/lib/demo-mode";
 import { env } from "@/lib/env";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
-
-function getImageUrl(key: string, fallback: string, timestamp?: string) {
-  if (!BASE_URL) return fallback;
-  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
-  // Add cache busting timestamp if provided
-  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
-}
 
 type GalleryGridProps = {
   images: ImageWithTags[];
@@ -36,6 +30,7 @@ type GalleryGridProps = {
   containerMode?: boolean;
   activeId?: string | null;
   imageSize?: ImageSize;
+  demoMode?: boolean;
 };
 
 export function GalleryGrid({ 
@@ -49,6 +44,7 @@ export function GalleryGrid({
   containerMode = false,
   activeId = null,
   imageSize = "medium",
+  demoMode = false,
 }: GalleryGridProps) {
   // Auswahlmodus ist aktiv, wenn mindestens ein Bild ausgewählt ist
   const isSelectionMode = selectedImageIds.size > 0;
@@ -80,7 +76,7 @@ export function GalleryGrid({
         className={cn("grid gap-2 md:gap-4", gridClasses[imageSize])}
         style={{ perspective: '1000px' }}
       >
-        {images.map((image) => (
+        {images.map((image, index) => (
           <SortableImageCard
             key={image.id}
             image={image}
@@ -92,6 +88,8 @@ export function GalleryGrid({
             onToggleSelection={onToggleSelection}
             isBeingDragged={activeId !== null && selectedImageIds.has(image.id)}
             isSelectionMode={isSelectionMode}
+            demoMode={demoMode}
+            imageIndex={index}
           />
         ))}
       </div>
@@ -109,6 +107,8 @@ type SortableImageCardProps = {
   onDelete?: (imageId: string) => void;
   isBeingDragged?: boolean;
   isSelectionMode?: boolean;
+  demoMode?: boolean;
+  imageIndex?: number;
 };
 
 function SortableImageCard({ 
@@ -121,6 +121,8 @@ function SortableImageCard({
   onDelete,
   isBeingDragged = false,
   isSelectionMode = false,
+  demoMode = false,
+  imageIndex = 0,
 }: SortableImageCardProps) {
   const { listeners, setNodeRef, transform, transition, attributes, isDragging } = useSortable({
     id: image.id,
@@ -234,7 +236,11 @@ function SortableImageCard({
   const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
   const gridKey = getImageVariantKey(image.key, 'grid');
-  const imageUrl = getImageUrl(gridKey, fallback, timestamp);
+  
+  // Use demo image if demo mode is enabled
+  const imageUrl = demoMode 
+    ? getDemoImageUrl(imageIndex)
+    : buildImageUrl(BASE_URL, gridKey, fallback, timestamp);
 
   return (
     <article

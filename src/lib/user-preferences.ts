@@ -13,6 +13,7 @@ export type UserPreferences = {
   rightSidebarOpen: boolean;
   imagesPerPage: number;
   sortOption: SortOption;
+  demoMode: boolean;
 };
 
 const COOKIE_NAME = "user-preferences";
@@ -112,7 +113,7 @@ export function getLeftSidebarCollapsed(): boolean {
  * Speichert den Zustand der rechten Sidebar (Container Panel)
  */
 export function saveRightSidebarOpen(open: boolean) {
-  console.log('[user-preferences] Saving rightSidebarOpen:', open);
+
   saveUserPreferences({ rightSidebarOpen: open });
 }
 
@@ -122,7 +123,7 @@ export function saveRightSidebarOpen(open: boolean) {
 export function getRightSidebarOpen(): boolean {
   const prefs = getUserPreferences();
   const value = prefs.rightSidebarOpen ?? false; // Default: geschlossen
-  console.log('[user-preferences] Getting rightSidebarOpen:', value, 'from prefs:', prefs);
+
   return value;
 }
 
@@ -154,4 +155,19 @@ export function saveSortOption(sort: SortOption) {
 export function getSortOption(): SortOption {
   const prefs = getUserPreferences();
   return prefs.sortOption ?? "none"; // Default: keine Sortierung
+}
+
+/**
+ * Speichert den Demo-Modus Status
+ */
+export function saveDemoMode(enabled: boolean) {
+  saveUserPreferences({ demoMode: enabled });
+}
+
+/**
+ * Lädt den Demo-Modus Status
+ */
+export function getDemoMode(): boolean {
+  const prefs = getUserPreferences();
+  return prefs.demoMode ?? false; // Default: deaktiviert
 }

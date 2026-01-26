@@ -38,7 +38,9 @@ import type { ImageWithTags, TagRecord } from "@/lib/db";
 import { formatFileSize } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useSidebar } from "@/components/sidebar-context";
-import { getImageSize, saveImageSize, getImagesPerPage, saveImagesPerPage, getSortOption, saveSortOption } from "@/lib/user-preferences";
+import { getImageSize, saveImageSize, getImagesPerPage, saveImagesPerPage, getSortOption, saveSortOption, getDemoMode } from "@/lib/user-preferences";
+import { anonymizeImage, anonymizeTag, getDemoImageUrl } from "@/lib/demo-mode";
+
 export type GalleryShellProps = {
   initialImages: ImageWithTags[];
   allTags: TagRecord[];
@@ -48,6 +50,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
   const { showToast } = useToast();
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const { setRightSidebarOpen } = useSidebar();
   
   const [images, setImages] = useState(initialImages);
@@ -79,6 +82,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   // Track client-side mounting für DndContext und Mobile detection
   useEffect(() => {
     setIsMounted(true);
+    setIsDemoMode(getDemoMode());
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
@@ -274,13 +278,24 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         return sorted;
     }
   }, [filteredImages, sortOption]);
+
+  // Apply demo mode transformation if enabled
+  const displayImages = useMemo(() => {
+    if (!isDemoMode) return sortedImages;
+    return sortedImages.map((img, index) => anonymizeImage(img, index));
+  }, [sortedImages, isDemoMode]);
+
+  const displayTags = useMemo(() => {
+    if (!isDemoMode) return availableTags;
+    return availableTags.map((tag, index) => anonymizeTag(tag, index));
+  }, [availableTags, isDemoMode]);
   // Berechne sichtbare Bilder basierend auf aktueller Seite
   const visibleImages = useMemo(() => {
     const startIndex = (currentPage - 1) * imagesPerPage;
     const endIndex = startIndex + imagesPerPage;
-    return sortedImages.slice(startIndex, endIndex);
-  }, [sortedImages, currentPage, imagesPerPage]);
-  const totalPages = Math.ceil(sortedImages.length / imagesPerPage);
+    return displayImages.slice(startIndex, endIndex);
+  }, [displayImages, currentPage, imagesPerPage]);
+  const totalPages = Math.ceil(displayImages.length / imagesPerPage);
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
@@ -738,37 +753,39 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     return (
       <>
         <ContainerPanel
-          tags={availableTags}
+          tags={displayTags}
           images={images}
           onRemoveImageFromTag={handleRemoveImageFromTag}
           containerMode={true}
           onTagCreated={handleTagCreated}
           onTagDeleted={handleTagDeleted}
+          demoMode={isDemoMode}
         />
       
       {selectedImageIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4 shadow-2xl min-w-[300px]">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium">
-              {selectedImageIds.size} Bild(er) ausgewählt
+        <div className="fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:min-w-[300px] z-50 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 rounded-lg border border-border bg-card p-3 sm:p-4 shadow-2xl">
+          <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-4">
+            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">
+              {selectedImageIds.size} Bild(er)
             </span>
             <Button
               size="sm"
               variant="outline"
               onClick={deselectAllImages}
+              className="text-xs"
             >
-              Auswahl aufheben
+              Aufheben
             </Button>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="default"
               onClick={handleBulkDownload}
-              className="flex-1 sm:flex-none"
+              className="flex-1"
             >
               <Download className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Herunterladen</span>
+              <span className="sm:inline">Download</span>
             </Button>
             {isAdmin && (
               <>
@@ -776,21 +793,21 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                   size="sm"
                   variant="outline"
                   onClick={handleBulkRotate}
-                  className="flex-1 sm:flex-none"
+                  className="flex-1"
                 >
                   <RotateCw className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Drehen</span>
+                  <span className="sm:inline">Drehen</span>
                 </Button>
                 <Button
                   size="sm"
                   variant="destructive"
                   onClick={handleBulkDelete}
                   disabled={bulkDeleteMutation.isPending}
-                  className="flex-1 sm:flex-none"
+                  className="flex-1"
                 >
                   <Trash2 className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">
-                    {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+                  <span className="sm:inline">
+                    {bulkDeleteMutation.isPending ? "..." : "Löschen"}
                   </span>
                 </Button>
               </>
@@ -802,7 +819,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         <div className="space-y-3 md:space-y-4 w-full">
           <div className="flex flex-col items-stretch gap-3">
             <TagFilter
-              tags={availableTags}
+              tags={displayTags}
               activeTagIds={filterTags}
               onToggle={(tagId) =>
                 setFilterTags((prev) =>
@@ -863,6 +880,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         containerMode={true}
         activeId={null}
         imageSize={imageSize}
+        demoMode={isDemoMode}
       />
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 mt-8">
@@ -995,15 +1013,12 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       />
       {/* Insta-Mode */}
       {showInstaMode && (
-        <>
-          {console.log('🎨 Rendering InstaMode, showInstaMode:', showInstaMode, 'images count:', sortedImages.length)}
-          <InstaMode
-            images={sortedImages}
-            onClose={() => {
-              setShowInstaMode(false);
-            }}
-          />
-        </>
+        <InstaMode
+          images={sortedImages}
+          onClose={() => {
+            setShowInstaMode(false);
+          }}
+        />
       )}
       {/* Rotation Queue */}
       <RotationQueue
@@ -1027,27 +1042,29 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       {/* Container Panel - nur auf Desktop */}
       {!isMobile && (
         <ContainerPanel
-          tags={availableTags}
+          tags={displayTags}
           images={images}
           onRemoveImageFromTag={handleRemoveImageFromTag}
           containerMode={true}
           onTagCreated={handleTagCreated}
           onTagDeleted={handleTagDeleted}
+          demoMode={isDemoMode}
         />
       )}
       
       {selectedImageIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4 shadow-2xl min-w-[300px]">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium">
-              {selectedImageIds.size} Bild(er) ausgewählt
+        <div className="fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:min-w-[300px] z-50 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 rounded-lg border border-border bg-card p-3 sm:p-4 shadow-2xl">
+          <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-4">
+            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">
+              {selectedImageIds.size} Bild(er)
             </span>
             <Button
               size="sm"
               variant="outline"
               onClick={deselectAllImages}
+              className="text-xs"
             >
-              Auswahl aufheben
+              Aufheben
             </Button>
           </div>
           <div className="flex items-center gap-2">
@@ -1055,9 +1072,10 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
               size="sm"
               variant="default"
               onClick={handleBulkDownload}
+              className="flex-1"
             >
-              <Download className="mr-2 h-4 w-4" />
-              Herunterladen
+              <Download className="h-4 w-4 sm:mr-2" />
+              <span className="sm:inline">Download</span>
             </Button>
             {isAdmin && (
               <>
@@ -1065,18 +1083,22 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                   size="sm"
                   variant="outline"
                   onClick={handleBulkRotate}
+                  className="flex-1"
                 >
-                  <RotateCw className="mr-2 h-4 w-4" />
-                  Drehen
+                  <RotateCw className="h-4 w-4 sm:mr-2" />
+                  <span className="sm:inline">Drehen</span>
                 </Button>
                 <Button
                   size="sm"
                   variant="destructive"
                   onClick={handleBulkDelete}
                   disabled={bulkDeleteMutation.isPending}
+                  className="flex-1"
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {bulkDeleteMutation.isPending ? "Lösche..." : "Löschen"}
+                  <Trash2 className="h-4 w-4 sm:mr-2" />
+                  <span className="sm:inline">
+                    {bulkDeleteMutation.isPending ? "..." : "Löschen"}
+                  </span>
                 </Button>
               </>
             )}
@@ -1088,7 +1110,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         <div className="space-y-4 w-full">
           <div className="flex flex-col items-stretch gap-3">
             <TagFilter
-              tags={availableTags}
+              tags={displayTags}
               activeTagIds={filterTags}
               onToggle={(tagId) =>
                 setFilterTags((prev) =>
@@ -1162,6 +1184,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             containerMode={true}
             activeId={activeId}
             imageSize={imageSize}
+            demoMode={isDemoMode}
           />
         </SortableContext>
         {/* Pagination */}
@@ -1333,23 +1356,21 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           {activeId ? (
             <SimpleDragPreview 
               imageIds={draggedImagesRef.current} 
-              images={images}
+              images={displayImages}
               velocity={dragVelocity}
+              demoMode={isDemoMode}
             />
           ) : null}
         </DragOverlay>
       )}
       {/* Insta-Mode */}
       {showInstaMode && (
-        <>
-          {console.log('🎨 Rendering InstaMode (2nd location), showInstaMode:', showInstaMode, 'images count:', sortedImages.length)}
-          <InstaMode
-            images={sortedImages}
-            onClose={() => {
-              setShowInstaMode(false);
-            }}
-          />
-        </>
+        <InstaMode
+          images={sortedImages}
+          onClose={() => {
+            setShowInstaMode(false);
+          }}
+        />
       )}
       {/* Rotation Queue */}
       <RotationQueue
@@ -1386,11 +1407,13 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
 function SimpleDragPreview({ 
   imageIds, 
   images, 
-  velocity 
+  velocity,
+  demoMode = false
 }: { 
   imageIds: string[]; 
   images: ImageWithTags[];
   velocity: { x: number; y: number };
+  demoMode?: boolean;
 }) {
   const BASE_URL = process.env.NEXT_PUBLIC_MINIO_BASE_URL;
   
@@ -1412,7 +1435,10 @@ function SimpleDragPreview({
     }}>
       {draggedImages.map((image, index) => {
         const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
-        const imageUrl = BASE_URL ? `${BASE_URL.replace(/\/$/, "")}/${image.key}` : fallback;
+        const imageIndex = images.indexOf(image);
+        const imageUrl = demoMode 
+          ? getDemoImageUrl(imageIndex)
+          : (BASE_URL ? `${BASE_URL.replace(/\/$/, "")}/${image.key}` : fallback);
         
         // Stapel-Effekt
         const offsetX = index * 8;

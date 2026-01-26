@@ -22,7 +22,6 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const leftCollapsed = getLeftSidebarCollapsed();
     const rightOpen = getRightSidebarOpen();
-    console.log('[SidebarContext] Loading from cookies:', { leftCollapsed, rightOpen });
     setLeftSidebarCollapsedState(leftCollapsed);
     setRightSidebarOpenState(rightOpen);
     setIsHydrated(true);
@@ -30,13 +29,11 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   // Wrapper-Funktionen, die auch in Cookies speichern
   const setLeftSidebarCollapsed = (collapsed: boolean) => {
-    console.log('[SidebarContext] Setting leftSidebarCollapsed to:', collapsed);
     setLeftSidebarCollapsedState(collapsed);
     saveLeftSidebarCollapsed(collapsed);
   };
 
   const setRightSidebarOpen = (open: boolean) => {
-    console.log('[SidebarContext] Setting rightSidebarOpen to:', open);
     setRightSidebarOpenState(open);
     saveRightSidebarOpen(open);
   };

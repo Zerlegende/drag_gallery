@@ -172,8 +172,6 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
       
       for (const item of filesToUpload) {
         try {
-          console.log('Processing:', item.file.name);
-          
           // 1. Convert to AVIF (if not already AVIF)
           let fileToUpload = item.file;
           let finalFilename = item.file.name;
@@ -181,7 +179,6 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
           let finalSize = item.file.size;
           
           if (item.file.type !== 'image/avif') {
-            console.log(`Converting ${item.file.name} to AVIF...`);
             const convertFormData = new FormData();
             convertFormData.append('file', item.file);
             
@@ -194,11 +191,6 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
               throw new Error('Konvertierung zu AVIF fehlgeschlagen');
             }
             
-            // Get metadata from headers
-            const originalFormat = convertResponse.headers.get('X-Original-Format');
-            const avifSize = convertResponse.headers.get('X-AVIF-Size');
-            console.log(`Converted from ${originalFormat}, size: ${avifSize} bytes`);
-            
             // Get the AVIF blob
             const avifBlob = await convertResponse.blob();
             finalFilename = item.file.name.replace(/\.[^/.]+$/, '') + '.avif';
@@ -206,8 +198,6 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
             finalSize = avifBlob.size;
             fileToUpload = new File([avifBlob], finalFilename, { type: 'image/avif' });
           }
-          
-          console.log('Uploading:', finalFilename);
           
           // 2. Hole presigned URL
           const uploadResponse = await fetch("/api/upload", {
@@ -221,15 +211,10 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
           });
 
           if (!uploadResponse.ok) {
-            const errorData = await uploadResponse.text();
-            console.error('Presigned URL Error:', errorData);
             throw new Error(`Presigned URL konnte nicht erstellt werden`);
           }
 
           const { url, fields, objectKey } = await uploadResponse.json();
-          console.log('Got presigned URL:', url);
-          console.log('Fields:', fields);
-          console.log('ObjectKey:', objectKey);
 
           // 3. Upload zu MinIO
           const formData = new FormData();
@@ -238,22 +223,16 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
           });
           formData.append("file", fileToUpload);
 
-          console.log('Uploading to MinIO...');
           const minioResponse = await fetch(url, {
             method: "POST",
             body: formData,
           });
 
-          console.log('MinIO Response Status:', minioResponse.status);
           if (!minioResponse.ok) {
-            const errorText = await minioResponse.text();
-            console.error('MinIO Error:', errorText);
             throw new Error(`Upload zu MinIO fehlgeschlagen (${minioResponse.status})`);
           }
 
-          console.log('MinIO upload successful!');
-
-          // 3. Speichere Metadaten in DB
+          // 4. Speichere Metadaten in DB
           const metadataResponse = await fetch("/api/images", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -267,12 +246,9 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
           });
 
           if (!metadataResponse.ok) {
-            const errorData = await metadataResponse.text();
-            console.error('Metadata Error:', errorData);
             throw new Error(`Metadaten konnten nicht gespeichert werden`);
           }
           
-          console.log('Metadata saved successfully!');
           successCount++;
         } catch (fileError) {
           // Fehler für dieses Bild loggen, aber weitermachen

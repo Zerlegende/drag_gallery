@@ -17,14 +17,10 @@ import { useToast } from "@/components/ui/toast";
 import { useSession } from "next-auth/react";
 import { getExpandedTags, saveExpandedTags } from "@/lib/user-preferences";
 import { ImageDetailDialog } from "./image-detail-dialog";
+import { buildImageUrl } from "@/lib/image-variants-utils";
+import { getDemoImageUrl } from "@/lib/demo-mode";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
-
-function getImageUrl(key: string, fallback: string, timestamp?: string) {
-  if (!BASE_URL) return fallback;
-  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
-  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
-}
 
 type ContainerPanelProps = {
   tags: TagRecord[];
@@ -33,6 +29,7 @@ type ContainerPanelProps = {
   containerMode: boolean;
   onTagCreated?: () => void;
   onTagDeleted?: () => void;
+  demoMode?: boolean;
 };
 
 export function ContainerPanel({
@@ -42,6 +39,7 @@ export function ContainerPanel({
   containerMode,
   onTagCreated,
   onTagDeleted,
+  demoMode = false,
 }: ContainerPanelProps) {
   const { rightSidebarOpen: contextOpen, setRightSidebarOpen: setContextOpen } = useSidebar();
   const { showToast } = useToast();
@@ -305,6 +303,7 @@ export function ContainerPanel({
                 isExpanded={expandedTags[tag.id] ?? true}
                 onToggleExpanded={() => toggleTag(tag.id)}
                 onExpand={(tag, images) => setExpandedContainer({ tag, images })}
+                demoMode={demoMode}
               />
             ))
           )}
@@ -318,6 +317,7 @@ export function ContainerPanel({
           images={expandedContainer.images}
           onClose={() => setExpandedContainer(null)}
           onRemoveImage={onRemoveImageFromTag}
+          demoMode={demoMode}
         />
       )}
 
@@ -396,9 +396,10 @@ type TagContainerProps = {
   isExpanded: boolean;
   onToggleExpanded: () => void;
   onExpand: (tag: TagRecord, images: ImageWithTags[]) => void;
+  demoMode?: boolean;
 };
 
-function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, isAdmin, isExpanded, onToggleExpanded, onExpand }: TagContainerProps) {
+function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, isAdmin, isExpanded, onToggleExpanded, onExpand, demoMode = false }: TagContainerProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `container-${tag.id}`,
     data: {
@@ -539,11 +540,13 @@ function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, 
             </div>
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-              {images.map((image) => (
+              {images.map((image, index) => (
                 <ContainerImageItem
                   key={image.id}
                   image={image}
                   onRemove={() => onRemoveImage(image.id)}
+                  demoMode={demoMode}
+                  imageIndex={index}
                 />
               ))}
             </div>
@@ -557,11 +560,15 @@ function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, 
 type ContainerImageItemProps = {
   image: ImageWithTags;
   onRemove: () => void;
+  demoMode?: boolean;
+  imageIndex?: number;
 };
 
-function ContainerImageItem({ image, onRemove }: ContainerImageItemProps) {
+function ContainerImageItem({ image, onRemove, demoMode = false, imageIndex = 0 }: ContainerImageItemProps) {
   const fallback = `https://dummyimage.com/100x100/1e293b/ffffff&text=${encodeURIComponent(image.filename.slice(0, 2))}`;
-  const imageUrl = getImageUrl(image.key, fallback);
+  const imageUrl = demoMode 
+    ? getDemoImageUrl(imageIndex)
+    : buildImageUrl(BASE_URL, image.key, fallback);
 
   return (
     <div className="group relative shrink-0">
@@ -598,9 +605,10 @@ type ContainerExpandedModalProps = {
   images: ImageWithTags[];
   onClose: () => void;
   onRemoveImage: (imageId: string, tagId: string) => void;
+  demoMode?: boolean;
 };
 
-function ContainerExpandedModal({ tag, images, onClose, onRemoveImage }: ContainerExpandedModalProps) {
+function ContainerExpandedModal({ tag, images, onClose, onRemoveImage, demoMode = false }: ContainerExpandedModalProps) {
   const [selectedImage, setSelectedImage] = useState<ImageWithTags | null>(null);
   const [localImages, setLocalImages] = useState(images);
   const [availableTags, setAvailableTags] = useState<TagRecord[]>([]);
@@ -686,7 +694,7 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage }: Contain
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-3 p-2">
-                {localImages.map((image) => (
+                {localImages.map((image, index) => (
                   <ContainerImageCard
                     key={image.id}
                     image={image}
@@ -694,6 +702,8 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage }: Contain
                     onLike={() => handleLike(image.id, image.is_liked || false)}
                     onDownload={() => handleDownload(image)}
                     onClick={() => setSelectedImage(image)}
+                    demoMode={demoMode}
+                    imageIndex={index}
                   />
                 ))}
               </div>
@@ -754,13 +764,17 @@ type ContainerImageCardProps = {
   onLike: () => void;
   onDownload: () => void;
   onClick: () => void;
+  demoMode?: boolean;
+  imageIndex?: number;
 };
 
-function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick }: ContainerImageCardProps) {
+function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick, demoMode = false, imageIndex = 0 }: ContainerImageCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const fallback = `https://dummyimage.com/400x300/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const imageUrl = getImageUrl(image.key, fallback, timestamp);
+  const imageUrl = demoMode 
+    ? getDemoImageUrl(imageIndex)
+    : buildImageUrl(BASE_URL, image.key, fallback, timestamp);
 
   return (
     <div 

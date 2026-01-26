@@ -6,15 +6,9 @@ import { X, Heart } from "lucide-react";
 import type { ImageWithTags } from "@/lib/db";
 import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
-import { getImageVariantKey } from "@/lib/image-variants-utils";
+import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
-
-function buildImageUrl(key: string, fallback: string, timestamp?: string) {
-  if (!BASE_URL) return fallback;
-  const baseUrl = `${BASE_URL.replace(/\/$/, "")}/${key}`;
-  return timestamp ? `${baseUrl}?t=${timestamp}` : baseUrl;
-}
 
 type LikeInfo = {
   userId: string;
@@ -237,6 +231,28 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     return () => clearTimeout(timer);
   }, [currentImage]);
 
+  // Handle browser back button / gesture navigation
+  useEffect(() => {
+    // Add hash to URL when opening (only once)
+    window.history.pushState(null, "", "#insta");
+
+    // Listen for back button
+    const handlePopState = () => {
+      onClose();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    // Cleanup: remove listener and reset URL (only on unmount)
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // Remove hash from URL without navigating back
+      if (window.location.hash === "#insta") {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    };
+  }, [onClose]);
+
   // Prevent body scroll
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -375,7 +391,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(currentImage.filename)}`;
   const timestamp = currentImage.updated_at || currentImage.created_at;
   const previewKey = getImageVariantKey(currentImage.key, 'preview');
-  const imageUrl = buildImageUrl(previewKey, fallback, timestamp);
+  const imageUrl = buildImageUrl(BASE_URL, previewKey, fallback, timestamp);
   const displayName = currentImage.imagename || currentImage.filename;
 
   return (
@@ -443,7 +459,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
         {preloadedImages.map((img, index) => {
           const previewKey = getImageVariantKey(img.key, 'preview');
           const timestamp = img.updated_at || img.created_at;
-          const url = buildImageUrl(previewKey, '', timestamp);
+          const url = buildImageUrl(BASE_URL, previewKey, '', timestamp);
           
           return (
             <div 
@@ -477,6 +493,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
           >
             <Image
               src={buildImageUrl(
+                BASE_URL,
                 getImageVariantKey(imageHistory[historyIndex - 1].key, 'preview'),
                 '',
                 imageHistory[historyIndex - 1].updated_at || imageHistory[historyIndex - 1].created_at
@@ -560,7 +577,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
             >
               {likers.slice(0, 5).map((liker, index) => {
                 const avatarUrl = liker.userImage 
-                  ? buildImageUrl(liker.userImage, liker.userImage)
+                  ? buildImageUrl(BASE_URL, liker.userImage, liker.userImage)
                   : null;
                 
                 return (
@@ -644,7 +661,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
               <div className="space-y-2">
                 {likers.map((liker, index) => {
                   const avatarUrl = liker.userImage 
-                    ? buildImageUrl(liker.userImage, liker.userImage)
+                    ? buildImageUrl(BASE_URL, liker.userImage, liker.userImage)
                     : null;
                   
                   return (
