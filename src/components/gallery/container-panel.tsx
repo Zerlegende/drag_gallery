@@ -17,7 +17,7 @@ import { useToast } from "@/components/ui/toast";
 import { useSession } from "next-auth/react";
 import { getExpandedTags, saveExpandedTags } from "@/lib/user-preferences";
 import { ImageDetailDialog } from "./image-detail-dialog";
-import { buildImageUrl } from "@/lib/image-variants-utils";
+import { buildImageUrl, getImageVariantKey } from "@/lib/image-variants-utils";
 import { getDemoImageUrl } from "@/lib/demo-mode";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
@@ -566,9 +566,10 @@ type ContainerImageItemProps = {
 
 function ContainerImageItem({ image, onRemove, demoMode = false, imageIndex = 0 }: ContainerImageItemProps) {
   const fallback = `https://dummyimage.com/100x100/1e293b/ffffff&text=${encodeURIComponent(image.filename.slice(0, 2))}`;
+  const gridKey = getImageVariantKey(image.key, 'grid');
   const imageUrl = demoMode 
     ? getDemoImageUrl(imageIndex)
-    : buildImageUrl(BASE_URL, image.key, fallback);
+    : buildImageUrl(BASE_URL, gridKey, fallback);
 
   return (
     <div className="group relative shrink-0">
@@ -772,9 +773,10 @@ function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick, demo
   const [imageLoaded, setImageLoaded] = useState(false);
   const fallback = `https://dummyimage.com/400x300/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
+  const gridKey = getImageVariantKey(image.key, 'grid');
   const imageUrl = demoMode 
     ? getDemoImageUrl(imageIndex)
-    : buildImageUrl(BASE_URL, image.key, fallback, timestamp);
+    : buildImageUrl(BASE_URL, gridKey, fallback, timestamp);
 
   return (
     <div 
