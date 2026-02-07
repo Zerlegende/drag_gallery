@@ -49,7 +49,7 @@ function getServerEnv(): ServerEnv {
 export const env = {
   server: getServerEnv,
   client: clientEnvSchema.parse({
-    NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME ?? "BZ Bilder Collector",
+    NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME ?? "Drag Gallery",
     NEXT_PUBLIC_MINIO_BUCKET:
       process.env.NEXT_PUBLIC_MINIO_BUCKET ?? "bz-bilder",
     NEXT_PUBLIC_MINIO_BASE_URL: process.env.NEXT_PUBLIC_MINIO_BASE_URL,

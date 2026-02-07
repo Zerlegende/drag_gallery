@@ -1,6 +1,6 @@
 {
-  "name": "BZ Bilder Collector",
-  "short_name": "Bilder",
+  "name": "Drag Gallery",
+  "short_name": "Gallery",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0f172a",

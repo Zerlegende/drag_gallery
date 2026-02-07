@@ -152,7 +152,7 @@ export function AdminSidebar() {
           {!leftSidebarCollapsed && (
             <Link href="/" className="flex items-center gap-2 font-semibold">
               <ImageIcon className="h-5 w-5" />
-              <span>BZ Bilder</span>
+              <span>Drag Gallery</span>
             </Link>
           )}
           {leftSidebarCollapsed && (

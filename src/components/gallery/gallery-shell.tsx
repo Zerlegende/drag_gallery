@@ -80,6 +80,12 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const lastDragPos = useRef({ x: 0, y: 0, time: 0 });
   const dragOverlayRef = useRef<HTMLDivElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  // Spring physics for smooth rotation
+  const currentRotation = useRef(0); // current visual rotation
+  const rotationVelocity = useRef(0); // angular velocity for inertia
+  const targetRotation = useRef(0); // where we want to rotate to
+  const isDraggingRef = useRef(false);
+  const springLoopRef = useRef<number | null>(null);
   // Track client-side mounting für DndContext und Mobile detection
   useEffect(() => {
     setIsMounted(true);
@@ -308,6 +314,10 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    
+    // Let spring physics settle back to 0deg with inertia
+    isDraggingRef.current = false;
+    targetRotation.current = 0;
     
     if (!over) {
       draggedImagesRef.current = [];
@@ -699,32 +709,59 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     const timeDelta = now - lastDragPos.current.time;
     
     if (timeDelta > 0) {
-      // Calculate velocity in pixels per millisecond
       const velocityX = (delta.x - lastDragPos.current.x) / timeDelta;
-      const velocityY = (delta.y - lastDragPos.current.y) / timeDelta;
+      dragVelocityRef.current = { x: velocityX * 100, y: 0 };
       
-      // Update ref directly without causing re-render
-      dragVelocityRef.current = { x: velocityX * 100, y: velocityY * 100 };
-      
-      // Update rotation via DOM directly for performance
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      animationFrameRef.current = requestAnimationFrame(() => {
-        if (dragOverlayRef.current) {
-          const velocityMagnitude = Math.sqrt(
-            dragVelocityRef.current.x * dragVelocityRef.current.x + 
-            dragVelocityRef.current.y * dragVelocityRef.current.y
-          );
-          const wobbleIntensity = Math.min(velocityMagnitude / 10, 12);
-          const wobbleRotation = dragVelocityRef.current.x > 0 ? wobbleIntensity : -wobbleIntensity;
-          const totalRotation = -5 + wobbleRotation;
-          dragOverlayRef.current.style.transform = `rotate(${totalRotation}deg)`;
-        }
-      });
+      // Calculate target rotation from drag velocity - lighter, more responsive
+      const velocityMagnitude = Math.abs(dragVelocityRef.current.x);
+      const wobbleIntensity = Math.min(velocityMagnitude / 4, 25);
+      const wobbleRotation = dragVelocityRef.current.x > 0 ? wobbleIntensity : -wobbleIntensity;
+      targetRotation.current = wobbleRotation;
     }
     
     lastDragPos.current = { x: delta.x, y: delta.y, time: now };
+    
+    // Start spring animation loop if not already running
+    if (!springLoopRef.current) {
+      isDraggingRef.current = true;
+      const springLoop = () => {
+        // Spring constants - lighter feel, more responsive
+        const stiffness = isDraggingRef.current ? 0.18 : 0.06;
+        const damping = 0.82;
+        
+        // Spring force toward target
+        const displacement = targetRotation.current - currentRotation.current;
+        const springForce = displacement * stiffness;
+        
+        // Apply spring force to velocity, then dampen
+        rotationVelocity.current += springForce;
+        rotationVelocity.current *= damping;
+        
+        // Update position
+        currentRotation.current += rotationVelocity.current;
+        
+        // Apply to DOM
+        if (dragOverlayRef.current) {
+          dragOverlayRef.current.style.transform = `rotate(${currentRotation.current}deg)`;
+        }
+        
+        // Keep looping if still moving or dragging
+        const isSettled = !isDraggingRef.current && 
+          Math.abs(rotationVelocity.current) < 0.01 && 
+          Math.abs(currentRotation.current) < 0.1;
+        
+        if (isSettled) {
+          currentRotation.current = 0;
+          if (dragOverlayRef.current) {
+            dragOverlayRef.current.style.transform = `rotate(0deg)`;
+          }
+          springLoopRef.current = null;
+        } else {
+          springLoopRef.current = requestAnimationFrame(springLoop);
+        }
+      };
+      springLoopRef.current = requestAnimationFrame(springLoop);
+    }
   };
   const handleTagCreated = async () => {
     // Reload tags after creating a new one
@@ -1436,7 +1473,7 @@ const SimpleDragPreview = React.forwardRef<
       ref={ref}
       style={{ 
         position: 'relative', 
-        transform: 'rotate(-5deg)', 
+        transform: 'rotate(0deg)', 
         pointerEvents: 'none',
         willChange: 'transform',
       }}
