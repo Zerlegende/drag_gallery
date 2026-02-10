@@ -12,7 +12,7 @@ import type {
   UserLikeStats,
   RecentLike,
   TopLikedImage,
-} from "./page";
+} from "./types";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
