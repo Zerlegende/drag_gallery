@@ -566,7 +566,7 @@ type ContainerImageItemProps = {
 
 function ContainerImageItem({ image, onRemove, demoMode = false, imageIndex = 0 }: ContainerImageItemProps) {
   const fallback = `https://dummyimage.com/100x100/1e293b/ffffff&text=${encodeURIComponent(image.filename.slice(0, 2))}`;
-  const gridKey = getImageVariantKey(image.key, 'grid');
+  const gridKey = getImageVariantKey(image.key, 'grid', image.variant_status);
   const imageUrl = demoMode 
     ? getDemoImageUrl(imageIndex)
     : buildImageUrl(BASE_URL, gridKey, fallback);
@@ -773,7 +773,7 @@ function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick, demo
   const [imageLoaded, setImageLoaded] = useState(false);
   const fallback = `https://dummyimage.com/400x300/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const gridKey = getImageVariantKey(image.key, 'grid');
+  const gridKey = getImageVariantKey(image.key, 'grid', image.variant_status);
   const imageUrl = demoMode 
     ? getDemoImageUrl(imageIndex)
     : buildImageUrl(BASE_URL, gridKey, fallback, timestamp);

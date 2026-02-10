@@ -172,41 +172,14 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
       
       for (const item of filesToUpload) {
         try {
-          // 1. Convert to AVIF (if not already AVIF)
-          let fileToUpload = item.file;
-          let finalFilename = item.file.name;
-          let finalMime = item.file.type;
-          let finalSize = item.file.size;
-          
-          if (item.file.type !== 'image/avif') {
-            const convertFormData = new FormData();
-            convertFormData.append('file', item.file);
-            
-            const convertResponse = await fetch('/api/convert-to-avif', {
-              method: 'POST',
-              body: convertFormData,
-            });
-            
-            if (!convertResponse.ok) {
-              throw new Error('Konvertierung zu AVIF fehlgeschlagen');
-            }
-            
-            // Get the AVIF blob
-            const avifBlob = await convertResponse.blob();
-            finalFilename = item.file.name.replace(/\.[^/.]+$/, '') + '.avif';
-            finalMime = 'image/avif';
-            finalSize = avifBlob.size;
-            fileToUpload = new File([avifBlob], finalFilename, { type: 'image/avif' });
-          }
-          
-          // 2. Hole presigned URL
+          // 1. Hole presigned URL (upload original file as-is)
           const uploadResponse = await fetch("/api/upload", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              filename: finalFilename,
-              mime: finalMime,
-              size: finalSize,
+              filename: item.file.name,
+              mime: item.file.type,
+              size: item.file.size,
             }),
           });
 
@@ -216,12 +189,12 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
 
           const { url, fields, objectKey } = await uploadResponse.json();
 
-          // 3. Upload zu MinIO
+          // 2. Upload zu MinIO (original format — AVIF conversion happens server-side)
           const formData = new FormData();
           Object.entries(fields).forEach(([key, value]) => {
             formData.append(key, value as string);
           });
-          formData.append("file", fileToUpload);
+          formData.append("file", item.file);
 
           const minioResponse = await fetch(url, {
             method: "POST",
@@ -232,15 +205,15 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
             throw new Error(`Upload zu MinIO fehlgeschlagen (${minioResponse.status})`);
           }
 
-          // 4. Speichere Metadaten in DB
+          // 3. Speichere Metadaten in DB (triggers background AVIF conversion + variant generation)
           const metadataResponse = await fetch("/api/images", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              filename: finalFilename,
+              filename: item.file.name,
               key: objectKey,
-              mime: finalMime,
-              size: finalSize,
+              mime: item.file.type,
+              size: item.file.size,
               tags: [],
             }),
           });

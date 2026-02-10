@@ -75,7 +75,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const fullscreenKey = getImageVariantKey(image.key, 'fullscreen');
+  const fullscreenKey = getImageVariantKey(image.key, 'fullscreen', image.variant_status);
   const imageUrl = buildImageUrl(BASE_URL, fullscreenKey, fallback, timestamp);
 
   // Filter suggestions based on search input (ensure availableTags is an array)

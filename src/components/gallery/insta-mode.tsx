@@ -486,7 +486,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(currentImage.filename)}`;
   const timestamp = currentImage.updated_at || currentImage.created_at;
-  const previewKey = getImageVariantKey(currentImage.key, 'preview');
+  const previewKey = getImageVariantKey(currentImage.key, 'preview', currentImage.variant_status);
   const imageUrl = buildImageUrl(BASE_URL, previewKey, fallback, timestamp);
   const displayName = currentImage.imagename || currentImage.filename;
 
@@ -553,7 +553,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
 
         {/* Preloaded Next 10 Images (stacked below) */}
         {preloadedImages.map((img, index) => {
-          const previewKey = getImageVariantKey(img.key, 'preview');
+          const previewKey = getImageVariantKey(img.key, 'preview', img.variant_status);
           const timestamp = img.updated_at || img.created_at;
           const url = buildImageUrl(BASE_URL, previewKey, '', timestamp);
           
@@ -590,7 +590,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
             <Image
               src={buildImageUrl(
                 BASE_URL,
-                getImageVariantKey(imageHistory[historyIndex - 1].key, 'preview'),
+                getImageVariantKey(imageHistory[historyIndex - 1].key, 'preview', imageHistory[historyIndex - 1].variant_status),
                 '',
                 imageHistory[historyIndex - 1].updated_at || imageHistory[historyIndex - 1].created_at
               )}

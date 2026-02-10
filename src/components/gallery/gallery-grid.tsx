@@ -235,7 +235,7 @@ function SortableImageCard({
 
   const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const gridKey = getImageVariantKey(image.key, 'grid');
+  const gridKey = getImageVariantKey(image.key, 'grid', image.variant_status);
   
   // Use demo image if demo mode is enabled
   const imageUrl = demoMode 
