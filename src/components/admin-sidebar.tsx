@@ -18,7 +18,8 @@ import {
   Upload,
   X,
   Eye,
-  EyeOff
+  EyeOff,
+  BarChart3
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/sidebar-context";
@@ -67,6 +68,7 @@ export function AdminSidebar() {
     { href: "/", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/liked", icon: Heart, label: "Gelikte Bilder" },
     ...(isAdmin ? [
+      { href: "/admin/analytics", icon: BarChart3, label: "Analytics" },
       { href: "/admin/users", icon: Users, label: "User Management" },
     ] : []),
     { href: "/admin/settings", icon: Settings, label: "Settings" },

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import { X, Heart } from "lucide-react";
+import { useSession } from "next-auth/react";
 import type { ImageWithTags } from "@/lib/db";
 import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export type InstaModeProps = {
 };
 
 export function InstaMode({ images, onClose }: InstaModeProps) {
+  const { data: session } = useSession();
   const [currentImage, setCurrentImage] = useState<ImageWithTags | null>(null);
   const [isLiked, setIsLiked] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
@@ -36,9 +38,15 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
   const [slideOffset, setSlideOffset] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [preloadedImages, setPreloadedImages] = useState<ImageWithTags[]>([]);
+  // Local map to track like status across navigation (survives back/forth swiping)
+  const likedMapRef = useRef<Map<string, boolean>>(new Map());
+  // Cache for like data (count + likers) - avoids delay on navigation
+  const likeDataCacheRef = useRef<Map<string, { likeCount: number; likers: LikeInfo[] }>>(new Map());
+  const prefetchingRef = useRef<Set<string>>(new Set());
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const touchEndRef = useRef<{ x: number; y: number } | null>(null);
   const lastTapRef = useRef<number>(0);
+  const currentUserId = (session?.user as any)?.id;
 
   // Get next 10 images from history or new randoms
   const getPreloadImages = (): ImageWithTags[] => {
@@ -102,6 +110,48 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     }
   };
 
+  // Apply cached like data for an image instantly
+  const applyCachedLikeData = (imageId: string, fallbackLiked: boolean) => {
+    const cached = likeDataCacheRef.current.get(imageId);
+    if (cached) {
+      setLikeCount(cached.likeCount);
+      setLikers(cached.likers);
+      const userLiked = currentUserId 
+        ? cached.likers.some(l => l.userId === currentUserId)
+        : false;
+      setIsLiked(likedMapRef.current.get(imageId) ?? userLiked);
+    } else {
+      setIsLiked(likedMapRef.current.get(imageId) ?? fallbackLiked);
+      setLikeCount(0);
+      setLikers([]);
+    }
+  };
+
+  // Prefetch like data for a list of image IDs
+  const prefetchLikeData = (imageIds: string[]) => {
+    for (const id of imageIds) {
+      if (likeDataCacheRef.current.has(id) || prefetchingRef.current.has(id)) continue;
+      prefetchingRef.current.add(id);
+      fetch(`/api/images/${id}/like`)
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then(data => {
+          likeDataCacheRef.current.set(id, {
+            likeCount: data.likeCount || 0,
+            likers: data.likers || [],
+          });
+          if (currentUserId && data.likers) {
+            const userLiked = data.likers.some((l: LikeInfo) => l.userId === currentUserId);
+            likedMapRef.current.set(id, userLiked);
+          }
+        })
+        .catch(() => {})
+        .finally(() => prefetchingRef.current.delete(id));
+    }
+  };
+
   // Navigate to next image (swipe up)
   const goToNextImage = () => {
     // Check if we can go forward in history
@@ -110,7 +160,8 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
       const nextImg = imageHistory[nextIndex];
       setHistoryIndex(nextIndex);
       setCurrentImage(nextImg);
-      setIsLiked(nextImg.is_liked || false);
+      applyCachedLikeData(nextImg.id, nextImg.is_liked ?? false);
+      setIsImageLoading(true);
     } else {
       // Get a new random image
       const newImage = getRandomImage(viewedImageIds);
@@ -118,7 +169,8 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
         setImageHistory(prev => [...prev, newImage]);
         setHistoryIndex(prev => prev + 1);
         setCurrentImage(newImage);
-        setIsLiked(newImage.is_liked || false);
+        applyCachedLikeData(newImage.id, newImage.is_liked ?? false);
+        setIsImageLoading(true);
       }
     }
   };
@@ -167,7 +219,8 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
       const prevImg = imageHistory[prevIndex];
       setHistoryIndex(prevIndex);
       setCurrentImage(prevImg);
-      setIsLiked(prevImg.is_liked || false);
+      applyCachedLikeData(prevImg.id, prevImg.is_liked ?? false);
+      setIsImageLoading(true);
     }
   };
 
@@ -214,22 +267,54 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     // Mark this image as viewed
     setViewedImageIds(prev => new Set(prev).add(currentImage.id));
     
-    // Debounce API call - only fetch after user stops swiping
-    const timer = setTimeout(() => {
-      fetch(`/api/images/${currentImage.id}/like`)
-        .then(res => res.json())
-        .then(data => {
-          setLikeCount(data.likeCount || 0);
-          setLikers(data.likers || []);
-        })
-        .catch(() => {
-          setLikeCount(0);
-          setLikers([]);
-        });
-    }, 300);
+    const imageId = currentImage.id;
     
-    return () => clearTimeout(timer);
-  }, [currentImage]);
+    // Show cached data immediately if available
+    const cached = likeDataCacheRef.current.get(imageId);
+    if (cached) {
+      setLikeCount(cached.likeCount);
+      setLikers(cached.likers);
+      if (currentUserId) {
+        const userLiked = cached.likers.some(l => l.userId === currentUserId);
+        if (!likedMapRef.current.has(imageId)) {
+          setIsLiked(userLiked);
+          likedMapRef.current.set(imageId, userLiked);
+        }
+      }
+    }
+    
+    // Always fetch fresh data (no debounce - cache handles instant display)
+    const abortController = new AbortController();
+    fetch(`/api/images/${imageId}/like`, { signal: abortController.signal })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const likeData = {
+          likeCount: data.likeCount || 0,
+          likers: data.likers || [],
+        };
+        // Update cache
+        likeDataCacheRef.current.set(imageId, likeData);
+        setLikeCount(likeData.likeCount);
+        setLikers(likeData.likers);
+        if (currentUserId && data.likers) {
+          const userLiked = data.likers.some((l: LikeInfo) => l.userId === currentUserId);
+          setIsLiked(userLiked);
+          likedMapRef.current.set(imageId, userLiked);
+        }
+      })
+      .catch(() => {});
+    
+    // Prefetch like data for upcoming images
+    const upcoming = imageHistory.slice(historyIndex + 1, historyIndex + 6).map(img => img.id);
+    if (upcoming.length > 0) {
+      prefetchLikeData(upcoming);
+    }
+    
+    return () => abortController.abort();
+  }, [currentImage, currentUserId]);
 
   // Handle browser back button / gesture navigation
   useEffect(() => {
@@ -269,6 +354,9 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     setIsLiked(newLikedState);
     setLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
     
+    // Save to local map immediately (optimistic)
+    likedMapRef.current.set(currentImage.id, newLikedState);
+    
     try {
       const response = await fetch(`/api/images/${currentImage.id}/like`, {
         method: "POST",
@@ -278,17 +366,25 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
         // Revert on error
         setIsLiked(!newLikedState);
         setLikeCount(prev => newLikedState ? Math.max(0, prev - 1) : prev + 1);
+        likedMapRef.current.set(currentImage.id, !newLikedState);
       } else {
         // Refresh like info to get updated likers list
-        const likeInfoResponse = await fetch(`/api/images/${currentImage.id}/like`);
-        const likeInfo = await likeInfoResponse.json();
-        setLikeCount(likeInfo.likeCount || 0);
-        setLikers(likeInfo.likers || []);
+        try {
+          const likeInfoResponse = await fetch(`/api/images/${currentImage.id}/like`);
+          if (likeInfoResponse.ok) {
+            const likeInfo = await likeInfoResponse.json();
+            setLikeCount(likeInfo.likeCount || 0);
+            setLikers(likeInfo.likers || []);
+          }
+        } catch {
+          // Ignore - optimistic state is fine
+        }
       }
     } catch (error) {
       // Revert on error
       setIsLiked(!newLikedState);
       setLikeCount(prev => newLikedState ? Math.max(0, prev - 1) : prev + 1);
+      likedMapRef.current.set(currentImage.id, !newLikedState);
     } finally {
       setIsLiking(false);
     }
@@ -451,7 +547,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
             sizes="100vw"
             quality={90}
             priority
-            onLoadingComplete={() => setIsImageLoading(false)}
+            onLoad={() => setIsImageLoading(false)}
           />
         </div>
 
@@ -592,6 +688,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
                         alt={liker.userName}
                         fill
                         className="object-cover"
+                        sizes="32px"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground text-xs font-semibold">
@@ -681,6 +778,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
                             alt={liker.userName}
                             fill
                             className="object-cover"
+                            sizes="48px"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground text-lg font-semibold">
