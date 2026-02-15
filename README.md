@@ -10,8 +10,7 @@ Eine installierbare Web-App (PWA) zur Bildverwaltung mit Drag & Drop, Tagging un
 
 Bilder per Drag & Drop auf Tags ziehen, um sie zuzuordnen — einzeln oder als Batch-Auswahl.
 
-<!-- TODO: GIF aufnehmen -->
-![Drag & Drop Demo](docs/gifs/drag-and-drop.gif)
+![Drag & Drop Demo](docs/gifs/drag_and_drop_example.gif)
 
 ---
 

@@ -33,17 +33,7 @@ export function anonymizeTag(tag: TagRecord, index: number): TagRecord {
  * Get placeholder image URL for demo mode
  */
 export function getDemoImageUrl(index: number): string {
-  // Use a placeholder service with different colors for variety
-  const colors = [
-    '6366f1', // indigo
-    '8b5cf6', // violet  
-    'ec4899', // pink
-    'f59e0b', // amber
-    '10b981', // emerald
-    '3b82f6', // blue
-    'ef4444', // red
-    '14b8a6', // teal
-  ];
-  const color = colors[index % colors.length];
-  return `https://dummyimage.com/800x600/${color}/ffffff&text=Demo+Bild+${index + 1}`;
+  // Use picsum.photos for random placeholder images
+  // Adding a seed parameter to get consistent but different images
+  return `https://picsum.photos/seed/${index + 1}/800/600`;
 }

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getAllTags, getImagesWithTags } from "@/lib/db";
 import { GalleryShell } from "@/components/gallery/gallery-shell";
-import { UploadButton } from "@/components/gallery/upload-button";
+import { UploadButtonMounted } from "@/components/gallery/upload-button-mounted";
 import { GalleryPageClient } from "@/components/gallery/gallery-page-client";
 import { LoadingState } from "@/components/loading-state";
 
@@ -43,7 +43,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
             Organisiere deine Bilder mit Tags und Filtern.
           </p>
           <div className="flex justify-center">
-            <UploadButton />
+            <UploadButtonMounted />
           </div>
         </div>
 
@@ -55,7 +55,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
               Organisiere deine Bilder mit Tags, Filtern und Drag & Drop.
             </p>
           </div>
-          <UploadButton />
+          <UploadButtonMounted />
         </div>
 
         <Suspense fallback={<LoadingState message="Lade Galerie..." slowLoadThreshold={2000} />}>

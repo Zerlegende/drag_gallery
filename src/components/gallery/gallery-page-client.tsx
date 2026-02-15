@@ -8,9 +8,14 @@ interface GalleryPageClientProps {
 }
 
 export function GalleryPageClient({ children }: GalleryPageClientProps) {
+  const [mounted, setMounted] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleUploadModalChange = (open: boolean) => {
     setUploadModalOpen(open);
@@ -120,13 +125,15 @@ export function GalleryPageClient({ children }: GalleryPageClientProps) {
       )}
 
       {/* Upload Modal - wird sowohl für Button als auch Drag & Drop verwendet */}
-      <div style={{ display: 'none' }}>
-        <UploadButton 
-          externalOpen={uploadModalOpen}
-          onExternalOpenChange={handleUploadModalChange}
-          initialFiles={droppedFiles}
-        />
-      </div>
+      {mounted && (
+        <div style={{ display: 'none' }}>
+          <UploadButton 
+            externalOpen={uploadModalOpen}
+            onExternalOpenChange={handleUploadModalChange}
+            initialFiles={droppedFiles}
+          />
+        </div>
+      )}
 
       {/* Content */}
       {children}
