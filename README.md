@@ -19,7 +19,7 @@ Bilder per Drag & Drop auf Tags ziehen, um sie zuzuordnen — einzeln oder als B
 Dateien einfach irgendwo auf die Seite ziehen — ein Fullscreen-Overlay öffnet sich und der Upload startet. Vorschau-Thumbnails, Duplikaterkennung und automatische AVIF-Konvertierung inklusive.
 
 <!-- TODO: GIF aufnehmen -->
-![Upload Dropzone Demo](docs/gifs/upload-dropzone.gif)
+![Upload Dropzone Demo](docs/gifs/upload_dropzone.gif)
 
 ---
 
@@ -37,7 +37,7 @@ Fullscreen-Ansicht im Instagram-Stil: Bilder durchswipen, per Doppeltipp liken (
 Tags als Badges anklicken, Textsuche über Titel und Tags, Filter für ungetaggte Bilder — alles kombinierbar.
 
 <!-- TODO: GIF aufnehmen -->
-![Tag Filter Demo](docs/gifs/tag-filter.gif)
+![Tag Filter Demo](docs/gifs/tag_filter.gif)
 
 ---
 
