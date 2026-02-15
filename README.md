@@ -59,6 +59,15 @@ Zwischen drei Dichte-Stufen wechseln, Bilder pro Seite einstellen und nach Datum
 
 ---
 
+### Admin Analytics
+
+Detaillierte Statistiken und Einblicke für Admins: Upload-Aktivität pro User, Like-Statistiken (gegeben & erhalten), Top 20 meist-gelikte Bilder, letzte Aktivitäten und Gesamt-Übersicht über alle Bilder, Likes und Speicherverbrauch.
+
+<!-- TODO: GIF aufnehmen -->
+![Analytics Demo](docs/gifs/analytics.gif)
+
+---
+
 ## Tech Stack
 
 | Bereich | Technologie |
@@ -80,6 +89,22 @@ npm run dev
 ```
 
 > Benötigt Node.js ≥ 18.
+
+### Datenbank-Migrationen
+
+Nach dem Setup solltest du die Datenbank-Migrationen ausführen:
+
+```bash
+node scripts/run-migrations.js
+```
+
+Oder manuell mit psql:
+```bash
+psql -U dein_user -d deine_db -f db/schema.sql
+psql -U dein_user -d deine_db -f db/migrations/001_add_likes_table.sql
+psql -U dein_user -d deine_db -f db/migrations/002_add_variant_status.sql
+psql -U dein_user -d deine_db -f db/migrations/003_add_system_settings.sql
+```
 
 ### User anlegen
 
@@ -138,8 +163,8 @@ src/
 - [ ] **Backup-Automation** mit S3 Lifecycle Policies
 
 ### Admin & Monitoring
+- [x] **Analytics** — Upload-Statistiken, Like-Aktivität, Top-Bilder, User-Übersicht
 - [ ] **Storage-Dashboard** — Speicherverbrauch, größte Dateien
-- [ ] **Analytics** — Most viewed, most liked, Upload-Statistiken
 - [ ] **Audit Log** für sensible Aktionen
 - [ ] **Tag-Verwaltung** — Umbenennen, Mergen, Löschen mit Preview, Berechtigungen zu bestimmten Tags
 

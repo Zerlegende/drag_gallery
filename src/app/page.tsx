@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { isMaintenanceMode } from "@/lib/maintenance";
 import { getAllTags, getImagesWithTags } from "@/lib/db";
 import { GalleryShell } from "@/components/gallery/gallery-shell";
 import { UploadButtonMounted } from "@/components/gallery/upload-button-mounted";
@@ -31,6 +32,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
   const session = await auth();
   if (!session?.user) {
     redirect("/auth/sign-in");
+  }
+
+  // Wartungsmodus Check - normale User zur Wartungsseite
+  const maintenanceActive = await isMaintenanceMode();
+  if (maintenanceActive && (session.user as any).role !== "admin") {
+    redirect("/maintenance");
   }
 
   return (

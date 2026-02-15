@@ -1,9 +1,14 @@
 /**
  * Image Variant Processing Queue
  * Processes images with max 2 concurrent operations to avoid RAM overflow
+ * 
+ * Flow: Original (JPEG/PNG/etc.) → Convert to AVIF → Generate size variants (@300, @800, @1600)
+ * All processing happens server-side in the background.
  */
 
+import sharp from 'sharp';
 import { generateImageVariants } from './image-variants';
+import { getObject, putObject, deleteObject } from './storage';
 import { query } from './db';
 
 type QueueItem = {
@@ -43,8 +48,17 @@ class VariantQueue {
         ['processing', item.imageId]
       );
 
-      // Generate variants
-      await generateImageVariants(item.key, item.mime);
+      let processingKey = item.key;
+      let processingMime = item.mime;
+
+      // Step 1: Convert to AVIF if not already AVIF
+      if (item.mime !== 'image/avif') {
+        processingKey = await this.convertOriginalToAvif(item.key, item.imageId);
+        processingMime = 'image/avif';
+      }
+
+      // Step 2: Generate size variants (@300, @800, @1600) from the (now AVIF) original
+      await generateImageVariants(processingKey, processingMime);
 
       // Update status to completed
       await query(
@@ -65,6 +79,57 @@ class VariantQueue {
       // Process next item in queue
       this.processNext();
     }
+  }
+
+  /**
+   * Convert original image to AVIF, upload it, update DB key, delete old original.
+   * Returns the new AVIF key.
+   */
+  private async convertOriginalToAvif(originalKey: string, imageId: string): Promise<string> {
+    // Download original from MinIO
+    const stream = await getObject(originalKey);
+    if (!stream) {
+      throw new Error(`Failed to fetch original: ${originalKey}`);
+    }
+
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of stream as any) {
+      chunks.push(chunk);
+    }
+    const originalBuffer = Buffer.concat(chunks);
+
+    if (originalBuffer.length === 0) {
+      throw new Error(`Original image is empty: ${originalKey}`);
+    }
+
+    // Convert to AVIF
+    const avifBuffer = await sharp(originalBuffer)
+      .avif({ quality: 80, effort: 4 })
+      .toBuffer();
+
+    // New key with .avif extension
+    const avifKey = originalKey.replace(/\.[^/.]+$/, '.avif');
+
+    // Upload AVIF version
+    await putObject(avifKey, avifBuffer, 'image/avif');
+
+    // Update DB: new key, mime, size, and filename
+    const avifFilename = originalKey.split('/').pop()?.replace(/\.[^/.]+$/, '.avif') || 'image.avif';
+    await query(
+      `UPDATE images SET key = $1, mime = 'image/avif', size = $2, filename = $3 WHERE id = $4`,
+      [avifKey, avifBuffer.length, avifFilename, imageId]
+    );
+
+    // Delete old original (only if key changed)
+    if (avifKey !== originalKey) {
+      try {
+        await deleteObject(originalKey);
+      } catch {
+        // Non-critical: old file stays, no problem
+      }
+    }
+
+    return avifKey;
   }
 
   getStatus() {

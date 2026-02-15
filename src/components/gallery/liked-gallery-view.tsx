@@ -215,7 +215,7 @@ function LikedImageCard({ image, onSelect, onUnlike }: LikedImageCardProps) {
 
   const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const gridVariantKey = getImageVariantKey(image.key, 'grid');
+  const gridVariantKey = getImageVariantKey(image.key, 'grid', image.variant_status);
   const imageUrl = buildImageUrl(BASE_URL, gridVariantKey, fallback, timestamp);
 
   return (

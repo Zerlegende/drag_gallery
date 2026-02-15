@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { isMaintenanceMode } from "@/lib/maintenance";
 import { query, getAllTags } from "@/lib/db";
 import type { ImageRecord } from "@/lib/db";
 import { LikedGalleryView } from "@/components/gallery/liked-gallery-view";
@@ -59,6 +60,12 @@ export default async function LikedPage() {
   
   if (!session?.user) {
     redirect("/auth/sign-in");
+  }
+
+  // Wartungsmodus Check - normale User zur Wartungsseite
+  const maintenanceActive = await isMaintenanceMode();
+  if (maintenanceActive && (session.user as any).role !== "admin") {
+    redirect("/maintenance");
   }
 
   return (

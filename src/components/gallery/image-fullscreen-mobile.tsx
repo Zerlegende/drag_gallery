@@ -263,7 +263,7 @@ export function ImageFullscreenMobile({
 
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
-  const previewKey = getImageVariantKey(image.key, 'preview');
+  const previewKey = getImageVariantKey(image.key, 'preview', image.variant_status);
   const imageUrl = buildImageUrl(BASE_URL, previewKey, fallback, timestamp);
   
   // Bildname: entweder imagename oder filename

@@ -20,13 +20,21 @@ export function getVariantKey(originalKey: string, width: number): string {
 }
 
 /**
- * Get the appropriate variant key for a given context
+ * Get the appropriate variant key for a given context.
+ * If variantStatus is provided and not 'completed', returns the original key
+ * (variants haven't been generated yet).
  */
 export function getImageVariantKey(
   originalKey: string,
-  variant: VariantName | 'original' = 'original'
+  variant: VariantName | 'original' = 'original',
+  variantStatus?: string
 ): string {
   if (variant === 'original') {
+    return originalKey;
+  }
+
+  // If variants are not ready yet, use original key
+  if (variantStatus && variantStatus !== 'completed') {
     return originalKey;
   }
   

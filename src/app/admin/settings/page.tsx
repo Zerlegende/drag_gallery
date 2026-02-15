@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { PasswordChangeForm } from "./password-change-form";
 import { AvatarUpload } from "./avatar-upload";
+import { MaintenanceModeSwitch } from "./maintenance-mode-switch";
 import { env } from "@/lib/env";
 
 export default async function SettingsPage() {
@@ -31,6 +32,14 @@ export default async function SettingsPage() {
       </div>
 
       <div className="max-w-2xl space-y-8">
+        {/* Wartungsmodus (nur für Admins) */}
+        {(session.user as any).role === "admin" && (
+          <div className="rounded-lg border bg-card p-6">
+            <h2 className="text-xl font-semibold mb-4">Systemeinstellungen</h2>
+            <MaintenanceModeSwitch />
+          </div>
+        )}
+
         {/* Avatar Upload */}
         <div className="rounded-lg border bg-card p-6">
           <h2 className="text-xl font-semibold mb-4">Profilbild</h2>

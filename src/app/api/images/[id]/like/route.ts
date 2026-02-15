@@ -9,6 +9,7 @@ type RouteContext = {
 // GET /api/images/:id/like - Get like information for an image
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
+    const session = await auth();
     const { id } = await context.params;
 
     // Get total like count
@@ -17,6 +18,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
       [id]
     );
     const likeCount = countResult[0]?.count || 0;
+
+    // Check if current user liked it
+    let isLiked = false;
+    if (session?.user?.id) {
+      const likeCheck = await query(
+        "SELECT id FROM likes WHERE user_id = $1 AND image_id = $2",
+        [session.user.id, id]
+      );
+      isLiked = likeCheck.length > 0;
+    }
 
     // Get users who liked this image (with their info)
     const likersResult = await query(
@@ -37,6 +48,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ 
       likeCount,
       likers,
+      isLiked,
     });
   } catch (error) {
     console.error("Error fetching like info:", error);
