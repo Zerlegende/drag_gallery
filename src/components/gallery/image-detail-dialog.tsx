@@ -123,10 +123,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
       setIsSaving(true);
       await new Promise(resolve => setTimeout(resolve, 500));
       setIsSaving(false);
-      showToast({
-        title: "Demo-Modus",
-        description: "Änderungen werden im Demo-Modus nicht gespeichert.",
-      });
+      showToast("info", "Demo-Modus: Änderungen werden nicht gespeichert.");
       onOpenChange(false);
       return;
     }
