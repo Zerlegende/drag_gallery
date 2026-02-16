@@ -13,6 +13,9 @@ import Link from "next/link";
 import { formatFileSize, cn } from "@/lib/utils";
 import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
 import { env } from "@/lib/env";
+import { getDemoMode } from "@/lib/user-preferences";
+import { getDemoImageUrl } from "@/lib/demo-mode";
+import { useToast } from "@/components/ui/toast";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
@@ -27,12 +30,15 @@ export type ImageDetailDialogProps = {
 export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, availableTags = [] }: ImageDetailDialogProps) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
+  const isDemoMode = getDemoMode();
+  const { showToast } = useToast();
   
   const [imageNameInput, setImageNameInput] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagSearchInput, setTagSearchInput] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [imageKey, setImageKey] = useState(0); // For forcing image reload
 
   useEffect(() => {
@@ -76,7 +82,11 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
   const fullscreenKey = getImageVariantKey(image.key, 'fullscreen', image.variant_status);
-  const imageUrl = buildImageUrl(BASE_URL, fullscreenKey, fallback, timestamp);
+  
+  // In demo mode, use demo image with proper seed
+  const imageUrl = isDemoMode 
+    ? getDemoImageUrl(image.id, 1920, 1080)
+    : buildImageUrl(BASE_URL, fullscreenKey, fallback, timestamp);
 
   // Filter suggestions based on search input (ensure availableTags is an array)
   const suggestions = (Array.isArray(availableTags) ? availableTags : [])
@@ -94,11 +104,33 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
     setShowSuggestions(false);
   };
 
+  const handleCreateAndAddTag = () => {
+    const trimmedInput = tagSearchInput.trim();
+    if (trimmedInput && !selectedTags.includes(trimmedInput)) {
+      setSelectedTags([...selectedTags, trimmedInput]);
+      setTagSearchInput("");
+      setShowSuggestions(false);
+    }
+  };
+
   const handleRemoveTag = (tagName: string) => {
     setSelectedTags(selectedTags.filter(t => t !== tagName));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isDemoMode) {
+      // In demo mode, simulate saving with a delay
+      setIsSaving(true);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setIsSaving(false);
+      showToast({
+        title: "Demo-Modus",
+        description: "Änderungen werden im Demo-Modus nicht gespeichert.",
+      });
+      onOpenChange(false);
+      return;
+    }
+    
     onSave(image.id, {
       tags: selectedTags,
       imagename: imageNameInput.trim() || undefined,
@@ -221,7 +253,13 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
                   setShowSuggestions(true);
                 }}
                 onFocus={() => setShowSuggestions(true)}
-                placeholder="Tag hinzufügen..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && isDemoMode && tagSearchInput.trim()) {
+                    e.preventDefault();
+                    handleCreateAndAddTag();
+                  }
+                }}
+                placeholder={isDemoMode ? "Demo-Tag hinzufügen..." : "Tag hinzufügen..."}
               />
               
               {/* Suggestions Dropdown */}
@@ -240,20 +278,29 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
                 </div>
               )}
 
-              {/* No results message */}
+              {/* No results message or demo mode hint */}
               {showSuggestions && tagSearchInput && suggestions.length === 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg p-3 text-sm text-muted-foreground">
-                  Kein existierender Tag gefunden. Nur vorhandene Tags können hinzugefügt werden.
+                  {isDemoMode ? (
+                    <>
+                      <div className="font-medium text-foreground mb-1">Demo-Modus</div>
+                      Drücke Enter um &quot;{tagSearchInput}&quot; als Demo-Tag hinzuzufügen. Änderungen werden nicht gespeichert.
+                    </>
+                  ) : (
+                    "Kein existierender Tag gefunden. Nur vorhandene Tags können hinzugefügt werden."
+                  )}
                 </div>
               )}
             </div>
           </div>
         </div>
         <DialogFooter className="flex gap-2">
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Schließen
           </Button>
-          <Button onClick={handleSubmit}>Speichern</Button>
+          <Button onClick={handleSubmit} disabled={isSaving}>
+            {isSaving ? "Speichere..." : "Speichern"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

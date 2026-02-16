@@ -546,7 +546,6 @@ function TagContainer({ tag, images, onRemoveImage, onDeleteTag, containerMode, 
                   image={image}
                   onRemove={() => onRemoveImage(image.id)}
                   demoMode={demoMode}
-                  imageIndex={index}
                 />
               ))}
             </div>
@@ -561,14 +560,13 @@ type ContainerImageItemProps = {
   image: ImageWithTags;
   onRemove: () => void;
   demoMode?: boolean;
-  imageIndex?: number;
 };
 
-function ContainerImageItem({ image, onRemove, demoMode = false, imageIndex = 0 }: ContainerImageItemProps) {
+function ContainerImageItem({ image, onRemove, demoMode = false }: ContainerImageItemProps) {
   const fallback = `https://dummyimage.com/100x100/1e293b/ffffff&text=${encodeURIComponent(image.filename.slice(0, 2))}`;
   const gridKey = getImageVariantKey(image.key, 'grid', image.variant_status);
   const imageUrl = demoMode 
-    ? getDemoImageUrl(imageIndex)
+    ? getDemoImageUrl(image.id)
     : buildImageUrl(BASE_URL, gridKey, fallback);
 
   return (
@@ -704,7 +702,6 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage, demoMode 
                     onDownload={() => handleDownload(image)}
                     onClick={() => setSelectedImage(image)}
                     demoMode={demoMode}
-                    imageIndex={index}
                   />
                 ))}
               </div>
@@ -766,16 +763,15 @@ type ContainerImageCardProps = {
   onDownload: () => void;
   onClick: () => void;
   demoMode?: boolean;
-  imageIndex?: number;
 };
 
-function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick, demoMode = false, imageIndex = 0 }: ContainerImageCardProps) {
+function ContainerImageCard({ image, onRemove, onLike, onDownload, onClick, demoMode = false }: ContainerImageCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const fallback = `https://dummyimage.com/400x300/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
   const timestamp = image.updated_at || image.created_at;
   const gridKey = getImageVariantKey(image.key, 'grid', image.variant_status);
   const imageUrl = demoMode 
-    ? getDemoImageUrl(imageIndex)
+    ? getDemoImageUrl(image.id)
     : buildImageUrl(BASE_URL, gridKey, fallback, timestamp);
 
   return (

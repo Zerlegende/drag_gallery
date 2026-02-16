@@ -1413,9 +1413,8 @@ const SimpleDragPreview = React.forwardRef<
     >
       {draggedImages.map((image, index) => {
         const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
-        const imageIndex = images.indexOf(image);
         const imageUrl = demoMode 
-          ? getDemoImageUrl(imageIndex)
+          ? getDemoImageUrl(image.id)
           : (BASE_URL ? `${BASE_URL.replace(/\/$/, "")}/${image.key}` : fallback);
         
         // Stapel-Effekt

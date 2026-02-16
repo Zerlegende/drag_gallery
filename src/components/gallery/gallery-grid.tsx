@@ -239,7 +239,7 @@ function SortableImageCard({
   
   // Use demo image if demo mode is enabled
   const imageUrl = demoMode 
-    ? getDemoImageUrl(imageIndex)
+    ? getDemoImageUrl(image.id)
     : buildImageUrl(BASE_URL, gridKey, fallback, timestamp);
 
   return (
