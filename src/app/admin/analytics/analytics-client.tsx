@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Heart, Upload, ImageIcon, Users, HardDrive, TrendingUp, Clock, Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { env } from "@/lib/env";
 import { buildImageUrl, getImageVariantKey } from "@/lib/image-variants-utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { getDemoMode } from "@/lib/user-preferences";
+import { generateDemoAnalytics, getDemoImageUrl } from "@/lib/demo-mode";
 import type {
   UserUploadStats,
   UserLikeStats,
@@ -119,11 +121,34 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const [previewLiked, setPreviewLiked] = useState(false);
   const [previewLikeCount, setPreviewLikeCount] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>(data);
+
+  // Replace with demo data if demo mode is active
+  useEffect(() => {
+    if (getDemoMode()) {
+      setAnalyticsData(generateDemoAnalytics());
+    }
+  }, []);
+
+  const isDemoMode = getDemoMode();
+
+  // Helper to get image URL (demo or real)
+  const getImageUrl = (imageKey: string, imageId: number, width: number, height: number) => {
+    if (isDemoMode) {
+      return getDemoImageUrl(imageId, width, height);
+    }
+    const gridKey = getImageVariantKey(imageKey, "grid");
+    return buildImageUrl(BASE_URL, gridKey, "");
+  };
 
   const openImagePreview = async (img: TopLikedImage) => {
     setSelectedImage(img);
     setPreviewLikeCount(img.likeCount);
     setPreviewLiked(false);
+    
+    // Skip API call in demo mode
+    if (isDemoMode) return;
+    
     // Fetch current user's like status
     try {
       const res = await fetch(`/api/images/${img.id}/like`);
@@ -142,6 +167,13 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
     const newLiked = !previewLiked;
     setPreviewLiked(newLiked);
     setPreviewLikeCount(prev => newLiked ? prev + 1 : Math.max(0, prev - 1));
+    
+    // Skip API call in demo mode - just update local state
+    if (isDemoMode) {
+      setIsLiking(false);
+      return;
+    }
+    
     try {
       const res = await fetch(`/api/images/${selectedImage.id}/like`, { method: "POST" });
       if (!res.ok) {
@@ -159,7 +191,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const handlePreviewDownload = async () => {
     if (!selectedImage) return;
     try {
-      const imageUrl = `${BASE_URL}/${selectedImage.imageKey}`;
+      const imageUrl = isDemoMode 
+        ? getDemoImageUrl(selectedImage.id, 1920, 1080)
+        : `${BASE_URL}/${selectedImage.imageKey}`;
       const response = await fetch(imageUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -208,22 +242,22 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
             <StatCard
               icon={ImageIcon}
               label="Bilder"
-              value={data.totalImages}
+              value={analyticsData.totalImages}
             />
             <StatCard
               icon={Heart}
               label="Likes"
-              value={data.totalLikes}
+              value={analyticsData.totalLikes}
             />
             <StatCard
               icon={Users}
               label="Nutzer"
-              value={data.totalUsers}
+              value={analyticsData.totalUsers}
             />
             <StatCard
               icon={HardDrive}
               label="Speicher"
-              value={formatBytes(data.totalSize)}
+              value={formatBytes(analyticsData.totalSize)}
             />
           </div>
 
@@ -236,13 +270,8 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                 Beliebteste Bilder
               </h3>
               <div className="space-y-3">
-                {data.topLikedImages.slice(0, 10).map((img, idx) => {
-                  const gridKey = getImageVariantKey(img.imageKey, "grid");
-                  const imageUrl = buildImageUrl(
-                    BASE_URL,
-                    gridKey,
-                    `https://dummyimage.com/80x80/1e293b/ffffff&text=${idx + 1}`
-                  );
+                {analyticsData.topLikedImages.slice(0, 10).map((img, idx) => {
+                  const imageUrl = getImageUrl(img.imageKey, img.id, 40, 40);
                   return (
                     <button
                       key={img.id}
@@ -278,7 +307,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                     </button>
                   );
                 })}
-                {data.topLikedImages.length === 0 && (
+                {analyticsData.topLikedImages.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-4">
                     Noch keine Likes vorhanden
                   </p>
@@ -293,9 +322,8 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                 Letzte Likes
               </h3>
               <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                {data.recentLikes.slice(0, 20).map((like) => {
-                  const gridKey = getImageVariantKey(like.imageKey, "grid");
-                  const imageUrl = buildImageUrl(BASE_URL, gridKey, "");
+                {analyticsData.recentLikes.slice(0, 20).map((like) => {
+                  const imageUrl = getImageUrl(like.imageKey, like.imageId, 32, 32);
                   return (
                     <div
                       key={like.id}
@@ -331,7 +359,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                     </div>
                   );
                 })}
-                {data.recentLikes.length === 0 && (
+                {analyticsData.recentLikes.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-4">
                     Noch keine Likes vorhanden
                   </p>
@@ -354,7 +382,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               </p>
             </div>
             <div className="divide-y divide-border">
-              {data.likeStats.map((user) => (
+              {analyticsData.likeStats.map((user) => (
                 <div
                   key={user.id}
                   className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/30 transition-colors"
@@ -393,9 +421,8 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               </p>
             </div>
             <div className="divide-y divide-border max-h-[600px] overflow-y-auto">
-              {data.recentLikes.map((like) => {
-                const gridKey = getImageVariantKey(like.imageKey, "grid");
-                const imageUrl = buildImageUrl(BASE_URL, gridKey, "");
+              {analyticsData.recentLikes.map((like) => {
+                const imageUrl = getImageUrl(like.imageKey, like.imageId, 40, 40);
                 return (
                   <div
                     key={like.id}
@@ -444,9 +471,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
               </p>
             </div>
             <div className="divide-y divide-border">
-              {data.uploadStats.map((user) => {
+              {analyticsData.uploadStats.map((user) => {
                 const maxUploads = Math.max(
-                  ...data.uploadStats.map((u) => u.uploadCount),
+                  ...analyticsData.uploadStats.map((u) => u.uploadCount),
                   1
                 );
                 const percentage = (user.uploadCount / maxUploads) * 100;
@@ -497,8 +524,9 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
         <DialogContent className="max-w-3xl p-0 overflow-hidden bg-background border-border">
           {selectedImage && (() => {
-            const previewKey = getImageVariantKey(selectedImage.imageKey, "preview");
-            const previewUrl = buildImageUrl(BASE_URL, previewKey, "");
+            const previewUrl = isDemoMode 
+              ? getDemoImageUrl(selectedImage.id, 800, 600) 
+              : buildImageUrl(BASE_URL, getImageVariantKey(selectedImage.imageKey, "preview"), "");
             return (
               <>
                 {/* Image */}

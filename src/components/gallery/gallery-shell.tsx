@@ -35,7 +35,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ImageWithTags, TagRecord } from "@/lib/db";
-import { formatFileSize } from "@/lib/utils";
+import { formatFileSize, cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useSidebar } from "@/components/sidebar-context";
 import { getImageSize, saveImageSize, getImagesPerPage, saveImagesPerPage, getSortOption, saveSortOption, getDemoMode } from "@/lib/user-preferences";
@@ -80,6 +80,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const lastDragPos = useRef({ x: 0, y: 0, time: 0 });
   const dragOverlayRef = useRef<HTMLDivElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const galleryTopRef = useRef<HTMLDivElement | null>(null);
   // Spring physics for smooth rotation
   const currentRotation = useRef(0); // current visual rotation
   const rotationVelocity = useRef(0); // angular velocity for inertia
@@ -303,6 +304,89 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     return displayImages.slice(startIndex, endIndex);
   }, [displayImages, currentPage, imagesPerPage]);
   const totalPages = Math.ceil(displayImages.length / imagesPerPage);
+
+  // Handle page change with scroll to top for bottom pagination
+  const handlePageChange = (newPage: number, scrollToTop: boolean = false) => {
+    setCurrentPage(newPage);
+    if (scrollToTop && galleryTopRef.current) {
+      galleryTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Pagination component (reusable)
+  const renderPagination = (scrollOnClick: boolean = false) => {
+    if (totalPages <= 1) return null;
+    
+    return (
+      <div className={cn(
+        "flex justify-center items-center gap-2",
+        scrollOnClick ? "mt-8" : "mb-6"
+      )}>
+        <Button
+          onClick={() => handlePageChange(1, scrollOnClick)}
+          disabled={currentPage === 1}
+          size="sm"
+          variant="outline"
+        >
+          Erste
+        </Button>
+        <Button
+          onClick={() => handlePageChange(Math.max(1, currentPage - 1), scrollOnClick)}
+          disabled={currentPage === 1}
+          size="sm"
+          variant="outline"
+        >
+          Zurück
+        </Button>
+        
+        <div className="flex items-center gap-2">
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            let pageNum;
+            if (totalPages <= 5) {
+              pageNum = i + 1;
+            } else if (currentPage <= 3) {
+              pageNum = i + 1;
+            } else if (currentPage >= totalPages - 2) {
+              pageNum = totalPages - 4 + i;
+            } else {
+              pageNum = currentPage - 2 + i;
+            }
+            
+            return (
+              <Button
+                key={pageNum}
+                onClick={() => handlePageChange(pageNum, scrollOnClick)}
+                size="sm"
+                variant={currentPage === pageNum ? "default" : "outline"}
+              >
+                {pageNum}
+              </Button>
+            );
+          })}
+        </div>
+        <Button
+          onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1), scrollOnClick)}
+          disabled={currentPage === totalPages}
+          size="sm"
+          variant="outline"
+        >
+          Weiter
+        </Button>
+        <Button
+          onClick={() => handlePageChange(totalPages, scrollOnClick)}
+          disabled={currentPage === totalPages}
+          size="sm"
+          variant="outline"
+        >
+          Letzte
+        </Button>
+        
+        <span className="ml-4 text-sm text-muted-foreground">
+          Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)
+        </span>
+      </div>
+    );
+  };
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
@@ -916,6 +1000,10 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           )}
         </div>
       </div>
+      <div ref={galleryTopRef}>
+        {/* Top Pagination */}
+        {renderPagination(false)}
+      </div>
       <GalleryGrid
         images={visibleImages}
         onSelectImage={setSelectedImage}
@@ -928,72 +1016,8 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         imageSize={imageSize}
         demoMode={isDemoMode}
       />
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-8">
-          <Button
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
-            size="sm"
-            variant="outline"
-          >
-            Erste
-          </Button>
-          <Button
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            size="sm"
-            variant="outline"
-          >
-            Zurück
-          </Button>
-          
-          <div className="flex items-center gap-2">
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              let pageNum;
-              if (totalPages <= 5) {
-                pageNum = i + 1;
-              } else if (currentPage <= 3) {
-                pageNum = i + 1;
-              } else if (currentPage >= totalPages - 2) {
-                pageNum = totalPages - 4 + i;
-              } else {
-                pageNum = currentPage - 2 + i;
-              }
-              
-              return (
-                <Button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  size="sm"
-                  variant={currentPage === pageNum ? "default" : "outline"}
-                >
-                  {pageNum}
-                </Button>
-              );
-            })}
-          </div>
-          <Button
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages}
-            size="sm"
-            variant="outline"
-          >
-            Weiter
-          </Button>
-          <Button
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages}
-            size="sm"
-            variant="outline"
-          >
-            Letzte
-          </Button>
-          
-          <span className="ml-4 text-sm text-muted-foreground">
-            Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)
-          </span>
-        </div>
-      )}
+      {/* Bottom Pagination - scrolls to top on click */}
+      {renderPagination(true)}
       {/* Desktop: Detail Dialog mit allen Funktionen */}
       {!isMobile && (
         <ImageDetailDialog
@@ -1064,6 +1088,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           onClose={() => {
             setShowInstaMode(false);
           }}
+          demoMode={isDemoMode}
         />
       )}
       {/* Rotation Queue */}
@@ -1217,7 +1242,11 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           ) : null}
         </div>
       </div>
-      <div className="mt-8">
+      <div ref={galleryTopRef} className="mt-6">
+        {/* Top Pagination */}
+        {renderPagination(false)}
+      </div>
+      <div className="mt-4">
         <SortableContext items={visibleImages.map((image) => image.id)} strategy={rectSortingStrategy}>
           <GalleryGrid
             images={visibleImages}
@@ -1233,105 +1262,8 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
             demoMode={isDemoMode}
           />
         </SortableContext>
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="mt-6 md:mt-8 mb-6 md:mb-8">
-            {/* Mobile: Kompakte Version */}
-            <div className="flex md:hidden flex-col gap-3">
-              <div className="flex justify-between items-center gap-2">
-                <Button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  size="sm"
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Zurück
-                </Button>
-                <span className="text-sm text-muted-foreground whitespace-nowrap px-2">
-                  {currentPage} / {totalPages}
-                </span>
-                <Button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  size="sm"
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Weiter
-                </Button>
-              </div>
-              <div className="text-xs text-center text-muted-foreground">
-                {sortedImages.length} Bilder gesamt
-              </div>
-            </div>
-            {/* Desktop: Vollständige Version */}
-            <div className="hidden md:flex justify-center items-center gap-2 flex-wrap">
-              <Button
-                onClick={() => setCurrentPage(1)}
-                disabled={currentPage === 1}
-                size="sm"
-                variant="outline"
-              >
-                Erste
-              </Button>
-              <Button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                size="sm"
-                variant="outline"
-              >
-                Zurück
-              </Button>
-              
-              <div className="flex items-center gap-2">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  
-                  return (
-                    <Button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      size="sm"
-                      variant={currentPage === pageNum ? "default" : "outline"}
-                    >
-                      {pageNum}
-                    </Button>
-                  );
-                })}
-              </div>
-              <Button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                size="sm"
-                variant="outline"
-              >
-                Weiter
-              </Button>
-              <Button
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-                size="sm"
-                variant="outline"
-              >
-                Letzte
-              </Button>
-              
-              <span className="ml-4 text-sm text-muted-foreground">
-                Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)
-              </span>
-            </div>
-          </div>
-        )}
+        {/* Bottom Pagination - scrolls to top on click */}
+        {renderPagination(true)}
       </div>
       {/* Desktop: Detail Dialog mit allen Funktionen */}
       {!isMobile && (
@@ -1416,6 +1348,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           onClose={() => {
             setShowInstaMode(false);
           }}
+          demoMode={isDemoMode}
         />
       )}
       {/* Rotation Queue */}

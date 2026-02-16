@@ -8,6 +8,7 @@ import type { ImageWithTags } from "@/lib/db";
 import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
 import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
+import { getDemoImageUrl } from "@/lib/demo-mode";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
@@ -20,9 +21,10 @@ type LikeInfo = {
 export type InstaModeProps = {
   images: ImageWithTags[];
   onClose: () => void;
+  demoMode?: boolean;
 };
 
-export function InstaMode({ images, onClose }: InstaModeProps) {
+export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps) {
   const { data: session } = useSession();
   const [currentImage, setCurrentImage] = useState<ImageWithTags | null>(null);
   const [isLiked, setIsLiked] = useState(false);
@@ -129,6 +131,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
 
   // Prefetch like data for a list of image IDs
   const prefetchLikeData = (imageIds: string[]) => {
+    if (demoMode) return; // Skip in demo mode
     for (const id of imageIds) {
       if (likeDataCacheRef.current.has(id) || prefetchingRef.current.has(id)) continue;
       prefetchingRef.current.add(id);
@@ -269,6 +272,14 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     
     const imageId = currentImage.id;
     
+    // In demo mode, always show 0 likes initially
+    if (demoMode) {
+      setLikeCount(0);
+      setLikers([]);
+      setIsLiked(likedMapRef.current.get(imageId) ?? false);
+      return;
+    }
+    
     // Show cached data immediately if available
     const cached = likeDataCacheRef.current.get(imageId);
     if (cached) {
@@ -314,7 +325,7 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     }
     
     return () => abortController.abort();
-  }, [currentImage, currentUserId]);
+  }, [currentImage, currentUserId, demoMode]);
 
   // Handle browser back button / gesture navigation
   useEffect(() => {
@@ -356,6 +367,12 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     
     // Save to local map immediately (optimistic)
     likedMapRef.current.set(currentImage.id, newLikedState);
+    
+    // In demo mode, only update local state, don't save to server
+    if (demoMode) {
+      setIsLiking(false);
+      return;
+    }
     
     try {
       const response = await fetch(`/api/images/${currentImage.id}/like`, {
@@ -484,11 +501,26 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
     return null;
   }
 
+  // Helper to get image seed from ID (consistent random seed)
+  const getImageSeed = (imageId: string) => {
+    // Convert image ID to a number to use as seed
+    let hash = 0;
+    for (let i = 0; i < imageId.length; i++) {
+      hash = ((hash << 5) - hash) + imageId.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
+  };
+
   const fallback = `https://dummyimage.com/1024x768/1e293b/ffffff&text=${encodeURIComponent(currentImage.filename)}`;
   const timestamp = currentImage.updated_at || currentImage.created_at;
   const previewKey = getImageVariantKey(currentImage.key, 'preview', currentImage.variant_status);
-  const imageUrl = buildImageUrl(BASE_URL, previewKey, fallback, timestamp);
-  const displayName = currentImage.imagename || currentImage.filename;
+  const imageUrl = demoMode 
+    ? `https://picsum.photos/seed/${getImageSeed(currentImage.id)}/1200/1600`
+    : buildImageUrl(BASE_URL, previewKey, fallback, timestamp);
+  const displayName = demoMode
+    ? `Demo Bild ${(getImageSeed(currentImage.id) % 999) + 1}`
+    : (currentImage.imagename || currentImage.filename);
 
   return (
     <div
@@ -555,11 +587,13 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
         {preloadedImages.map((img, index) => {
           const previewKey = getImageVariantKey(img.key, 'preview', img.variant_status);
           const timestamp = img.updated_at || img.created_at;
-          const url = buildImageUrl(BASE_URL, previewKey, '', timestamp);
+          const url = demoMode
+            ? `https://picsum.photos/seed/${getImageSeed(img.id)}/1200/1600`
+            : buildImageUrl(BASE_URL, previewKey, '', timestamp);
           
           return (
             <div 
-              key={img.id}
+              key={`${img.id}-${index}`}
               className="absolute inset-0 w-full h-full"
               style={{
                 transform: `translateY(${slideOffset + window.innerHeight * (index + 1)}px)`,
@@ -588,12 +622,15 @@ export function InstaMode({ images, onClose }: InstaModeProps) {
             }}
           >
             <Image
-              src={buildImageUrl(
-                BASE_URL,
-                getImageVariantKey(imageHistory[historyIndex - 1].key, 'preview', imageHistory[historyIndex - 1].variant_status),
-                '',
-                imageHistory[historyIndex - 1].updated_at || imageHistory[historyIndex - 1].created_at
-              )}
+              src={demoMode
+                ? `https://picsum.photos/seed/${getImageSeed(imageHistory[historyIndex - 1].id)}/1200/1600`
+                : buildImageUrl(
+                    BASE_URL,
+                    getImageVariantKey(imageHistory[historyIndex - 1].key, 'preview', imageHistory[historyIndex - 1].variant_status),
+                    '',
+                    imageHistory[historyIndex - 1].updated_at || imageHistory[historyIndex - 1].created_at
+                  )
+              }
               alt={imageHistory[historyIndex - 1].imagename || imageHistory[historyIndex - 1].filename}
               fill
               className="object-contain"
