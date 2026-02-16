@@ -133,7 +133,7 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   const isDemoMode = getDemoMode();
 
   // Helper to get image URL (demo or real)
-  const getImageUrl = (imageKey: string, imageId: number, width: number, height: number) => {
+  const getImageUrl = (imageKey: string, imageId: number | string, width: number, height: number) => {
     if (isDemoMode) {
       return getDemoImageUrl(imageId, width, height);
     }

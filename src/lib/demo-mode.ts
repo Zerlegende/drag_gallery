@@ -32,10 +32,14 @@ export function anonymizeTag(tag: TagRecord, index: number): TagRecord {
 /**
  * Get placeholder image URL for demo mode
  */
-export function getDemoImageUrl(index: number, width: number = 800, height: number = 600): string {
+export function getDemoImageUrl(index: number | string, width: number = 800, height: number = 600): string {
   // Use picsum.photos for random placeholder images
   // Adding a seed parameter to get consistent but different images
-  return `https://picsum.photos/seed/${index + 1}/${width}/${height}`;
+  // Convert string IDs to a deterministic number for consistent images
+  const seed = typeof index === 'string' 
+    ? Math.abs(index.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
+    : index + 1;
+  return `https://picsum.photos/seed/${seed}/${width}/${height}`;
 }
 
 /**
