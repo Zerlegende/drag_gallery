@@ -29,6 +29,7 @@ import { InstaMode } from "@/components/gallery/insta-mode";
 import { ContainerPanel } from "@/components/gallery/container-panel";
 import { RotationQueue, type QueueItem } from "@/components/gallery/rotation-queue";
 import { ProcessingStatusIndicator } from "@/components/gallery/processing-status-indicator";
+import { DownloadFormatDialog } from "@/components/gallery/download-format-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -62,6 +63,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [activeId, setActiveId] = useState<string | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>("small"); // Default für SSR
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showBulkDownloadDialog, setShowBulkDownloadDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [imagesPerPage, setImagesPerPageState] = useState(50); // Default für SSR
   const [sortOption, setSortOption] = useState<SortOption>("none"); // Default für SSR
@@ -748,25 +750,10 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
       showToast("error", "Fehler beim Herunterladen des Bildes");
     }
   };
-  const handleBulkDownload = async () => {
+  const handleBulkDownload = () => {
     const selectedImages = images.filter(img => selectedImageIds.has(img.id));
-    
     if (selectedImages.length === 0) return;
-    showToast("info", `Lade ${selectedImages.length} Bild(er) herunter...`);
-    // If only one image, download directly
-    if (selectedImages.length === 1) {
-      await downloadImage(selectedImages[0]);
-      return;
-    }
-    // For multiple images, download one by one with delay
-    for (let i = 0; i < selectedImages.length; i++) {
-      await downloadImage(selectedImages[i]);
-      // Small delay to avoid overwhelming the browser
-      if (i < selectedImages.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-    }
-    showToast("success", `${selectedImages.length} Bild(er) erfolgreich heruntergeladen`);
+    setShowBulkDownloadDialog(true);
   };
   const handleDragStart = (event: DragStartEvent) => {
     const draggedId = event.active.id as string;
@@ -1081,6 +1068,12 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         variant="destructive"
         onConfirm={confirmBulkDelete}
       />
+      <DownloadFormatDialog
+        open={showBulkDownloadDialog}
+        onOpenChange={setShowBulkDownloadDialog}
+        imageIds={images.filter(img => selectedImageIds.has(img.id)).map(img => img.id)}
+        imageNames={images.filter(img => selectedImageIds.has(img.id)).map(img => img.imagename || img.filename)}
+      />
       {/* Insta-Mode */}
       {showInstaMode && (
         <InstaMode
@@ -1327,6 +1320,12 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
         cancelText="Abbrechen"
         variant="destructive"
         onConfirm={confirmBulkDelete}
+      />
+      <DownloadFormatDialog
+        open={showBulkDownloadDialog}
+        onOpenChange={setShowBulkDownloadDialog}
+        imageIds={images.filter(img => selectedImageIds.has(img.id)).map(img => img.id)}
+        imageNames={images.filter(img => selectedImageIds.has(img.id)).map(img => img.imagename || img.filename)}
       />
       {/* DragOverlay nur auf Desktop */}
       {!isMobile && (

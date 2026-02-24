@@ -20,7 +20,6 @@ Bilder per Drag & Drop auf Tags ziehen, um sie zuzuordnen — einzeln oder als B
 
 Dateien einfach irgendwo auf die Seite ziehen — ein Fullscreen-Overlay öffnet sich und der Upload startet. Vorschau-Thumbnails, Duplikaterkennung und automatische AVIF-Konvertierung inklusive.
 
-<!-- TODO: GIF aufnehmen -->
 <p align="center">
   <img src="docs/gifs/upload_dropzone.gif" alt="Upload Dropzone Demo" />
 </p>
@@ -31,7 +30,6 @@ Dateien einfach irgendwo auf die Seite ziehen — ein Fullscreen-Overlay öffnet
 
 Fullscreen-Ansicht im Instagram-Stil (Nur auf dem Handy): Bilder durchswipen, per Doppeltipp liken (mit Herz-Animation), Like-Zähler und Liker-Avatare sehen.
 
-<!-- TODO: GIF aufnehmen -->
 <p align="center">
   <img src="docs/gifs/insta_mode.gif" alt="Insta Mode Demo" />
 </p>
@@ -42,7 +40,6 @@ Fullscreen-Ansicht im Instagram-Stil (Nur auf dem Handy): Bilder durchswipen, pe
 
 Tags als Badges anklicken, Textsuche über Titel und Tags, Filter für ungetaggte Bilder — alles kombinierbar.
 
-<!-- TODO: GIF aufnehmen -->
 <p align="center">
   <img src="docs/gifs/tag_filter.gif" alt="Tag Filter Demo" />
 </p>
@@ -53,7 +50,6 @@ Tags als Badges anklicken, Textsuche über Titel und Tags, Filter für ungetaggt
 
 Bild anklicken → Dialog mit voller Auflösung, editierbarem Namen und Tag-Autocomplete.
 
-<!-- TODO: GIF aufnehmen -->
 <p align="center">
   <img src="docs/gifs/image_detail.gif" alt="Image Detail Demo" />
 </p>
@@ -64,7 +60,6 @@ Bild anklicken → Dialog mit voller Auflösung, editierbarem Namen und Tag-Auto
 
 Zwischen drei Dichte-Stufen wechseln, Bilder pro Seite einstellen und nach Datum oder Name sortieren.
 
-<!-- TODO: GIF aufnehmen -->
 <p align="center">
   <img src="docs/gifs/grid_layout.gif" alt="Grid Layout Demo" />
 </p>
@@ -75,7 +70,6 @@ Zwischen drei Dichte-Stufen wechseln, Bilder pro Seite einstellen und nach Datum
 
 Detaillierte Statistiken und Einblicke für Admins: Upload-Aktivität pro User, Like-Statistiken (gegeben & erhalten), Top 20 meist-gelikte Bilder, letzte Aktivitäten und Gesamt-Übersicht über alle Bilder, Likes und Speicherverbrauch.
 
-<!-- TODO: GIF aufnehmen -->
 <p align="center">
   <img src="docs/gifs/analytics.gif" alt="Analytics Demo" />
 </p>

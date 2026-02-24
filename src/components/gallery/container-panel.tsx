@@ -17,6 +17,7 @@ import { useToast } from "@/components/ui/toast";
 import { useSession } from "next-auth/react";
 import { getExpandedTags, saveExpandedTags } from "@/lib/user-preferences";
 import { ImageDetailDialog } from "./image-detail-dialog";
+import { DownloadFormatDialog } from "./download-format-dialog";
 import { buildImageUrl, getImageVariantKey } from "@/lib/image-variants-utils";
 import { getDemoImageUrl } from "@/lib/demo-mode";
 
@@ -611,6 +612,7 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage, demoMode 
   const [selectedImage, setSelectedImage] = useState<ImageWithTags | null>(null);
   const [localImages, setLocalImages] = useState(images);
   const [availableTags, setAvailableTags] = useState<TagRecord[]>([]);
+  const [downloadImage, setDownloadImage] = useState<ImageWithTags | null>(null);
 
   // Fetch available tags for the image detail dialog
   useEffect(() => {
@@ -654,22 +656,8 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage, demoMode 
     }
   };
 
-  const handleDownload = async (image: ImageWithTags) => {
-    try {
-      const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = image.imagename || image.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error downloading image:", error);
-    }
+  const handleDownload = (image: ImageWithTags) => {
+    setDownloadImage(image);
   };
 
   return (
@@ -719,6 +707,15 @@ function ContainerExpandedModal({ tag, images, onClose, onRemoveImage, demoMode 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {downloadImage && (
+        <DownloadFormatDialog
+          open={!!downloadImage}
+          onOpenChange={(open) => !open && setDownloadImage(null)}
+          imageIds={[downloadImage.id]}
+          imageNames={[downloadImage.imagename || downloadImage.filename]}
+        />
+      )}
 
       {selectedImage && (
         <ImageDetailDialog

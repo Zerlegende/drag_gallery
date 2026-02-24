@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DownloadFormatDialog } from "@/components/gallery/download-format-dialog";
 import { cn } from "@/lib/utils";
 import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
 import { getDemoImageUrl } from "@/lib/demo-mode";
@@ -133,6 +134,7 @@ function SortableImageCard({
   // Track click position to detect if it was a drag or click
   const [mouseDownPos, setMouseDownPos] = useState<{ x: number; y: number } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDownloadDialog, setShowDownloadDialog] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isLiked, setIsLiked] = useState(image.is_liked || false);
   const [isLiking, setIsLiking] = useState(false);
@@ -175,24 +177,9 @@ function SortableImageCard({
     }
   };
 
-  const handleDownload = async (e: React.MouseEvent) => {
+  const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      // Always download original, not variant
-      const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = image.imagename || image.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error downloading image:", error);
-    }
+    setShowDownloadDialog(true);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -420,6 +407,13 @@ function SortableImageCard({
           </div>
         </div>
       </div>
+
+      <DownloadFormatDialog
+        open={showDownloadDialog}
+        onOpenChange={setShowDownloadDialog}
+        imageIds={[image.id]}
+        imageNames={[image.imagename || image.filename]}
+      />
     </article>
   );
 }

@@ -10,6 +10,7 @@ import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DownloadFormatDialog } from "@/components/gallery/download-format-dialog";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
@@ -34,6 +35,7 @@ export function ImageFullscreenMobile({
 }: ImageFullscreenMobileProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
+  const [showDownloadDialog, setShowDownloadDialog] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagSearchInput, setTagSearchInput] = useState("");
   const [isLiked, setIsLiked] = useState(false);
@@ -217,23 +219,7 @@ export function ImageFullscreenMobile({
   // Handle Download
   const handleDownload = async () => {
     if (!image) return;
-    
-    try {
-      // Always download original, not variant
-      const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = image.imagename || image.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error downloading image:", error);
-    }
+    setShowDownloadDialog(true);
     setShowMenu(false);
   };
 
@@ -278,6 +264,7 @@ export function ImageFullscreenMobile({
     .slice(0, 10);
 
   return (
+    <>
     <div
       className={cn(
         "fixed inset-0 z-50 bg-black",
@@ -572,5 +559,15 @@ export function ImageFullscreenMobile({
         </p>
       </div>
     </div>
+
+    {image && (
+      <DownloadFormatDialog
+        open={showDownloadDialog}
+        onOpenChange={setShowDownloadDialog}
+        imageIds={[image.id]}
+        imageNames={[image.imagename || image.filename]}
+      />
+    )}
+    </>
   );
 }
