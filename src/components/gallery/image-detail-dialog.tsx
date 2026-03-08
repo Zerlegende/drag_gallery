@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
 import type { ImageWithTags, TagRecord } from "@/lib/db";
@@ -41,6 +41,11 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
   const [isSaving, setIsSaving] = useState(false);
   const [imageKey, setImageKey] = useState(0); // For forcing image reload
 
+  // Stable ref so the popstate handler always calls the latest onOpenChange
+  // without re-running the effect on every parent render
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+
   useEffect(() => {
     if (image) {
       setSelectedTags(image.tags.map((tag) => tag.name));
@@ -52,6 +57,8 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
   }, [image]);
 
   // Handle browser back button / gesture navigation
+  // Dependency is image?.id so pushState is only called once per opened image,
+  // not on every re-render caused by the inline onOpenChange reference changing.
   useEffect(() => {
     if (!image) return;
 
@@ -60,7 +67,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
 
     // Listen for back button
     const handlePopState = () => {
-      onOpenChange(false);
+      onOpenChangeRef.current(false);
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -73,7 +80,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
         window.history.replaceState(null, "", window.location.pathname + window.location.search);
       }
     };
-  }, [image, onOpenChange]);
+  }, [image?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!image) {
     return null;

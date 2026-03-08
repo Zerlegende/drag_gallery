@@ -46,6 +46,8 @@ export function ImageFullscreenMobile({
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const touchEndRef = useRef<{ x: number; y: number } | null>(null);
   const isSwipingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   // Initialize tags and like status when image changes
   useEffect(() => {
@@ -58,21 +60,21 @@ export function ImageFullscreenMobile({
     }
   }, [image]);
 
-  // Handle browser back button / gesture navigation - only on mount/unmount
+  // Handle browser back button / gesture navigation
   useEffect(() => {
     if (!image) return;
 
-    // Add hash to URL when opening (only once)
+    // Add hash to URL when opening (once per opened image)
     window.history.pushState(null, "", "#image");
 
     // Listen for back button
     const handlePopState = () => {
-      onClose();
+      onCloseRef.current();
     };
 
     window.addEventListener("popstate", handlePopState);
 
-    // Cleanup: remove listener and reset URL (only on unmount)
+    // Cleanup: remove listener and reset URL
     return () => {
       window.removeEventListener("popstate", handlePopState);
       // Remove hash from URL without navigating back
@@ -81,7 +83,7 @@ export function ImageFullscreenMobile({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - only run on mount/unmount!
+  }, [image?.id]); // Re-run when a different image is opened
 
   // Handle click outside menu to close it
   useEffect(() => {

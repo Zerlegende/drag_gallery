@@ -101,7 +101,11 @@ export function DownloadFormatDialog({
           {FORMATS.map((format) => (
             <button
               key={format.value}
-              onClick={() => setSelectedFormat(format.value)}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setSelectedFormat(format.value);
+              }}
               className={cn(
                 "flex items-center justify-between rounded-lg border px-4 py-3 text-left transition-all",
                 "hover:bg-accent hover:border-primary/50",
@@ -141,14 +145,20 @@ export function DownloadFormatDialog({
         <DialogFooter className="flex-row gap-2 sm:gap-0">
           <Button
             variant="secondary"
-            onClick={() => onOpenChange(false)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenChange(false);
+            }}
             disabled={isDownloading}
             className="w-full sm:w-auto"
           >
             Abbrechen
           </Button>
           <Button
-            onClick={handleDownload}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDownload();
+            }}
             disabled={isDownloading}
             className="w-full sm:w-auto"
           >

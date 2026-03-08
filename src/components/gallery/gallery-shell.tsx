@@ -321,7 +321,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
     
     return (
       <div className={cn(
-        "flex justify-center items-center gap-2",
+        "flex justify-center items-center gap-1 md:gap-2",
         scrollOnClick ? "mt-8" : "mb-6"
       )}>
         <Button
@@ -329,29 +329,33 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           disabled={currentPage === 1}
           size="sm"
           variant="outline"
+          className="px-2 md:px-3"
         >
-          Erste
+          <span className="md:hidden">«</span>
+          <span className="hidden md:inline">Erste</span>
         </Button>
         <Button
           onClick={() => handlePageChange(Math.max(1, currentPage - 1), scrollOnClick)}
           disabled={currentPage === 1}
           size="sm"
           variant="outline"
+          className="px-2 md:px-3"
         >
-          Zurück
+          <span className="md:hidden">‹</span>
+          <span className="hidden md:inline">Zurück</span>
         </Button>
         
-        <div className="flex items-center gap-2">
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+        <div className="flex items-center gap-1 md:gap-2">
+          {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
             let pageNum;
-            if (totalPages <= 5) {
+            if (totalPages <= 3) {
               pageNum = i + 1;
-            } else if (currentPage <= 3) {
+            } else if (currentPage <= 2) {
               pageNum = i + 1;
-            } else if (currentPage >= totalPages - 2) {
-              pageNum = totalPages - 4 + i;
+            } else if (currentPage >= totalPages - 1) {
+              pageNum = totalPages - 2 + i;
             } else {
-              pageNum = currentPage - 2 + i;
+              pageNum = currentPage - 1 + i;
             }
             
             return (
@@ -360,6 +364,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                 onClick={() => handlePageChange(pageNum, scrollOnClick)}
                 size="sm"
                 variant={currentPage === pageNum ? "default" : "outline"}
+                className="px-2 md:px-3 min-w-[2rem]"
               >
                 {pageNum}
               </Button>
@@ -371,20 +376,25 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           disabled={currentPage === totalPages}
           size="sm"
           variant="outline"
+          className="px-2 md:px-3"
         >
-          Weiter
+          <span className="md:hidden">›</span>
+          <span className="hidden md:inline">Weiter</span>
         </Button>
         <Button
           onClick={() => handlePageChange(totalPages, scrollOnClick)}
           disabled={currentPage === totalPages}
           size="sm"
           variant="outline"
+          className="px-2 md:px-3"
         >
-          Letzte
+          <span className="md:hidden">»</span>
+          <span className="hidden md:inline">Letzte</span>
         </Button>
         
-        <span className="ml-4 text-sm text-muted-foreground">
-          Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)
+        <span className="ml-2 md:ml-4 text-xs md:text-sm text-muted-foreground whitespace-nowrap">
+          <span className="md:hidden">{currentPage}/{totalPages}</span>
+          <span className="hidden md:inline">Seite {currentPage} von {totalPages} ({sortedImages.length} Bilder)</span>
         </span>
       </div>
     );
