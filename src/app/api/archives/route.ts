@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, isAdminOrModerator } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { getArchives, createArchive } from "@/lib/db";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user || !isAdminOrModerator((session.user as any).role)) {
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const archives = await getArchives();

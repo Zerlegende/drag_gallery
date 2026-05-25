@@ -953,15 +953,17 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [], archi
             </Button>
             {isAdmin && (
               <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleOpenMoveToArchive}
-                  className="flex-1"
-                >
-                  <Archive className="h-4 w-4 sm:mr-2" />
-                  <span className="sm:inline">Archiv</span>
-                </Button>
+                {isAdminOrMod && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleOpenMoveToArchive}
+                    className="flex-1"
+                  >
+                    <Archive className="h-4 w-4 sm:mr-2" />
+                    <span className="sm:inline">Archiv</span>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -1199,15 +1201,17 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [], archi
             </Button>
             {isAdmin && (
               <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleOpenMoveToArchive}
-                  className="flex-1"
-                >
-                  <Archive className="h-4 w-4 sm:mr-2" />
-                  <span className="sm:inline">Archiv</span>
-                </Button>
+                {isAdminOrMod && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleOpenMoveToArchive}
+                    className="flex-1"
+                  >
+                    <Archive className="h-4 w-4 sm:mr-2" />
+                    <span className="sm:inline">Archiv</span>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"

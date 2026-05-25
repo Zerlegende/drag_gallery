@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, isAdminOrModerator } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { getArchiveById, updateArchiveName, deleteArchive, moveImagesToArchive } from "@/lib/db";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const session = await auth();
-  if (!session?.user || !isAdminOrModerator((session.user as any).role)) {
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;

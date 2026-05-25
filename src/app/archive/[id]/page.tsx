@@ -41,10 +41,6 @@ export default async function ArchivePage({ params, searchParams }: Props) {
     redirect("/maintenance");
   }
 
-  if (!isAdminOrModerator((session.user as any).role)) {
-    redirect("/");
-  }
-
   const { id } = await params;
   const archive = await getArchiveById(id);
   if (!archive) notFound();

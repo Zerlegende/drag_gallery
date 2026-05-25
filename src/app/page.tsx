@@ -19,17 +19,15 @@ async function GalleryLoader({ searchParams, role, userId }: { searchParams: Pro
       ? [tagFilter]
       : [];
 
-  const canSeeArchives = isAdminOrModerator(role);
-
   const [images, tags, archives] = await Promise.all([
     getImagesWithTags(filterTags, userId, null),
     getAllTags(),
-    canSeeArchives ? getArchives() : Promise.resolve([]),
+    getArchives(),
   ]);
 
   return (
     <>
-      {canSeeArchives && <ArchiveFolderGrid archives={archives} isAdmin={role === "admin"} />}
+      <ArchiveFolderGrid archives={archives} isAdmin={role === "admin"} />
       <GalleryShell initialImages={images} allTags={tags} initialFilter={filterTags} />
     </>
   );
