@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   DndContext,
@@ -19,7 +20,7 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useMutation } from "@tanstack/react-query";
-import { Trash2, Grid3x3, Grid2x2, LayoutGrid, Download, Heart, RotateCw } from "lucide-react";
+import { Trash2, Grid3x3, Grid2x2, LayoutGrid, Download, Heart, RotateCw, Archive } from "lucide-react";
 import { GalleryGrid } from "@/components/gallery/gallery-grid";
 import { TagFilter, type ImageSize } from "@/components/gallery/tag-filter";
 import type { SortOption } from "@/components/gallery/tag-filter";
@@ -33,9 +34,10 @@ import { DownloadFormatDialog } from "@/components/gallery/download-format-dialo
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ImageWithTags, TagRecord } from "@/lib/db";
+import type { ImageWithTags, TagRecord, ArchiveRecord } from "@/lib/db";
 import { formatFileSize, cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useSidebar } from "@/components/sidebar-context";
@@ -46,10 +48,13 @@ export type GalleryShellProps = {
   initialImages: ImageWithTags[];
   allTags: TagRecord[];
   initialFilter?: string[];
+  archiveId?: string;
 };
-export function GalleryShell({ initialImages, allTags, initialFilter = [] }: GalleryShellProps) {
+export function GalleryShell({ initialImages, allTags, initialFilter = [], archiveId }: GalleryShellProps) {
+  const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
+  const isAdminOrMod = session?.user?.role === "admin" || session?.user?.role === "moderator";
   const { showToast } = useToast();
   const [isDemoMode, setIsDemoMode] = useState(false);
   const { setRightSidebarOpen } = useSidebar();
@@ -64,6 +69,8 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const [imageSize, setImageSize] = useState<ImageSize>("small"); // Default für SSR
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [showBulkDownloadDialog, setShowBulkDownloadDialog] = useState(false);
+  const [showMoveToArchiveDialog, setShowMoveToArchiveDialog] = useState(false);
+  const [availableArchives, setAvailableArchives] = useState<ArchiveRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [imagesPerPage, setImagesPerPageState] = useState(50); // Default für SSR
   const [sortOption, setSortOption] = useState<SortOption>("none"); // Default für SSR
@@ -591,6 +598,36 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
   const handleSingleDelete = (imageId: string) => {
     bulkDeleteMutation.mutate([imageId]);
   };
+  const handleOpenMoveToArchive = async () => {
+    if (selectedImageIds.size === 0) return;
+    try {
+      const res = await fetch("/api/archives");
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableArchives(data.archives);
+      }
+    } catch {}
+    setShowMoveToArchiveDialog(true);
+  };
+  const handleMoveToArchive = async (targetArchiveId: string | null) => {
+    const imageIds = Array.from(selectedImageIds);
+    try {
+      const res = await fetch("/api/archives/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageIds, archiveId: targetArchiveId }),
+      });
+      if (!res.ok) throw new Error();
+      setImages((prev) => prev.filter((img) => !selectedImageIds.has(img.id)));
+      setSelectedImageIds(new Set());
+      setShowMoveToArchiveDialog(false);
+      const label = targetArchiveId === null ? "Hauptgalerie" : (availableArchives.find(a => a.id === targetArchiveId)?.name ?? "Archiv");
+      showToast("success", `${imageIds.length} Bild(er) nach "${label}" verschoben`, 2500);
+      router.refresh();
+    } catch {
+      showToast("error", "Verschieben fehlgeschlagen");
+    }
+  };
   // Bulk rotate function with queue
   const handleBulkRotate = async () => {
     const selectedImages = images.filter(img => selectedImageIds.has(img.id));
@@ -919,6 +956,15 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={handleOpenMoveToArchive}
+                  className="flex-1"
+                >
+                  <Archive className="h-4 w-4 sm:mr-2" />
+                  <span className="sm:inline">Archiv</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={handleBulkRotate}
                   className="flex-1"
                 >
@@ -1156,6 +1202,15 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={handleOpenMoveToArchive}
+                  className="flex-1"
+                >
+                  <Archive className="h-4 w-4 sm:mr-2" />
+                  <span className="sm:inline">Archiv</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={handleBulkRotate}
                   className="flex-1"
                 >
@@ -1179,7 +1234,7 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
           </div>
         </div>
       )}
-      
+
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mt-8">
         <div className="space-y-4 w-full">
           <div className="flex flex-col items-stretch gap-3">
@@ -1376,6 +1431,42 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [] }: Gal
 
       {/* Processing Status Indicator */}
       <ProcessingStatusIndicator />
+
+      {/* Archiv-Dialog */}
+      <Dialog open={showMoveToArchiveDialog} onOpenChange={setShowMoveToArchiveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {archiveId ? "Bilder verschieben" : "In Archiv verschieben"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {archiveId && (
+              <button
+                className="w-full text-left rounded-lg border border-border px-4 py-3 hover:bg-muted transition-colors text-sm font-medium"
+                onClick={() => handleMoveToArchive(null)}
+              >
+                Zurück in Hauptgalerie
+              </button>
+            )}
+            {availableArchives.filter(a => a.id !== archiveId).map((archive) => (
+              <button
+                key={archive.id}
+                className="w-full text-left rounded-lg border border-border px-4 py-3 hover:bg-muted transition-colors"
+                onClick={() => handleMoveToArchive(archive.id)}
+              >
+                <div className="font-medium text-sm">{archive.name}</div>
+                <div className="text-xs text-muted-foreground">{archive.image_count ?? 0} Bilder</div>
+              </button>
+            ))}
+            {availableArchives.filter(a => a.id !== archiveId).length === 0 && !archiveId && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Noch keine Archive vorhanden. Erstelle zuerst ein Archiv auf der Hauptseite.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       </div>
   );
   // Auf Desktop: Mit DndContext, auf Mobile: Ohne DndContext

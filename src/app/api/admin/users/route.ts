@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!role || !["admin", "user"].includes(role)) {
+    if (!role || !["admin", "moderator", "user"].includes(role)) {
       return NextResponse.json(
         { error: "Ungültige Rolle" },
         { status: 400 }

@@ -336,6 +336,12 @@ export function UserManagementClient({
                           User
                         </div>
                       </SelectItem>
+                      <SelectItem value="moderator">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-3 w-3 text-blue-500" />
+                          Moderator
+                        </div>
+                      </SelectItem>
                       <SelectItem value="admin">
                         <div className="flex items-center gap-2">
                           <Shield className="h-3 w-3" />
@@ -422,6 +428,12 @@ export function UserManagementClient({
                         <div className="flex items-center gap-2">
                           <Shield className="h-3 w-3" />
                           Admin
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="moderator">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-3 w-3 text-blue-500" />
+                          Moderator
                         </div>
                       </SelectItem>
                       <SelectItem value="user">

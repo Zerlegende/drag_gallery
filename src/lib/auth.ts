@@ -105,3 +105,11 @@ export const authConfig: NextAuthConfig = {
 };
 
 export const { auth, handlers, signIn, signOut } = NextAuth(authConfig);
+
+export function isAdmin(role: string | undefined | null): boolean {
+  return role === "admin";
+}
+
+export function isAdminOrModerator(role: string | undefined | null): boolean {
+  return role === "admin" || role === "moderator";
+}

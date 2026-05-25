@@ -55,7 +55,7 @@ export async function PATCH(
 
     // Handle role update
     if (role !== undefined) {
-      if (!["admin", "user"].includes(role)) {
+      if (!["admin", "moderator", "user"].includes(role)) {
         return NextResponse.json(
           { error: "Invalid role" },
           { status: 400 }

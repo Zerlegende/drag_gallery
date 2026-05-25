@@ -17,7 +17,10 @@ const bodySchema = z.object({
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const tags = searchParams.getAll("tag");
-  const images = await getImagesWithTags(tags);
+  const archiveParam = searchParams.get("archive");
+  // "main" = Hauptgalerie (ohne Archiv), UUID = spezifisches Archiv, null = alle
+  const archiveId = archiveParam === "main" ? null : archiveParam ?? undefined;
+  const images = await getImagesWithTags(tags, undefined, archiveId);
   return NextResponse.json({ images });
 }
 

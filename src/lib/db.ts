@@ -26,6 +26,15 @@ export type ImageRecord = {
   variant_status?: string; // 'pending', 'processing', 'completed', 'failed'
   liked_count?: number; // Count of likes (from JOIN)
   is_liked?: boolean;   // Whether current user liked it (from JOIN)
+  archive_id?: string | null;
+};
+
+export type ArchiveRecord = {
+  id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+  image_count?: number;
 };
 
 export type LikeRecord = {
@@ -95,7 +104,8 @@ function mapImageRows(rows: ({ tags: string | TagRecord[] } & ImageRecord)[]) {
   });
 }
 
-export async function getImagesWithTags(filterTags: string[] = [], userId?: string) {
+// archiveId: undefined = kein Filter, null = Hauptgalerie (ohne Archiv), string = spezifisches Archiv
+export async function getImagesWithTags(filterTags: string[] = [], userId?: string, archiveId?: string | null) {
   const params: unknown[] = [];
   let sql = `
     SELECT i.*,
@@ -105,8 +115,7 @@ export async function getImagesWithTags(filterTags: string[] = [], userId?: stri
     ) AS tags,
     COUNT(DISTINCT l.id) AS liked_count
   `;
-  
-  // Add is_liked column if userId is provided
+
   if (userId) {
     params.push(userId);
     sql += `,
@@ -115,7 +124,7 @@ export async function getImagesWithTags(filterTags: string[] = [], userId?: stri
     ) AS is_liked
     `;
   }
-  
+
   sql += `
     FROM images i
     LEFT JOIN image_tags it ON it.image_id = i.id
@@ -123,23 +132,80 @@ export async function getImagesWithTags(filterTags: string[] = [], userId?: stri
     LEFT JOIN likes l ON l.image_id = i.id
   `;
 
+  const conditions: string[] = [];
+
+  if (archiveId === null) {
+    conditions.push("i.archive_id IS NULL");
+  } else if (archiveId !== undefined) {
+    params.push(archiveId);
+    conditions.push(`i.archive_id = $${params.length}`);
+  }
+
   if (filterTags.length > 0) {
     params.push(filterTags);
-    sql += `
-      WHERE i.id IN (
+    conditions.push(`i.id IN (
         SELECT image_id
         FROM image_tags
         WHERE tag_id = ANY($${params.length}::uuid[])
         GROUP BY image_id
         HAVING COUNT(DISTINCT tag_id) >= array_length($${params.length}::uuid[], 1)
-      )
-    `;
+      )`);
+  }
+
+  if (conditions.length > 0) {
+    sql += " WHERE " + conditions.join(" AND ");
   }
 
   sql += " GROUP BY i.id ORDER BY i.position ASC, i.created_at DESC";
 
   const rows = await query<{ tags: string; liked_count?: string; is_liked?: boolean } & ImageRecord>(sql, params);
   return mapImageRows(rows);
+}
+
+export async function getArchives(): Promise<ArchiveRecord[]> {
+  return query<ArchiveRecord>(`
+    SELECT a.*, COUNT(i.id)::int AS image_count
+    FROM archives a
+    LEFT JOIN images i ON i.archive_id = a.id
+    GROUP BY a.id
+    ORDER BY a.created_at ASC
+  `);
+}
+
+export async function getArchiveById(id: string): Promise<ArchiveRecord | null> {
+  const rows = await query<ArchiveRecord>(`
+    SELECT a.*, COUNT(i.id)::int AS image_count
+    FROM archives a
+    LEFT JOIN images i ON i.archive_id = a.id
+    WHERE a.id = $1
+    GROUP BY a.id
+  `, [id]);
+  return rows[0] ?? null;
+}
+
+export async function createArchive(name: string, createdBy?: string): Promise<ArchiveRecord> {
+  const rows = await query<ArchiveRecord>(
+    "INSERT INTO archives (name, created_by) VALUES ($1, $2) RETURNING *",
+    [name.trim(), createdBy ?? null]
+  );
+  return { ...rows[0], image_count: 0 };
+}
+
+export async function updateArchiveName(id: string, name: string): Promise<void> {
+  await query("UPDATE archives SET name = $1 WHERE id = $2", [name.trim(), id]);
+}
+
+export async function deleteArchive(id: string): Promise<void> {
+  await query("UPDATE images SET archive_id = NULL WHERE archive_id = $1", [id]);
+  await query("DELETE FROM archives WHERE id = $1", [id]);
+}
+
+export async function moveImagesToArchive(imageIds: string[], archiveId: string | null): Promise<void> {
+  if (imageIds.length === 0) return;
+  await query(
+    `UPDATE images SET archive_id = $1 WHERE id = ANY($2::uuid[])`,
+    [archiveId, imageIds]
+  );
 }
 
 export async function getImageById(id: string) {
