@@ -39,6 +39,7 @@ export function AdminSidebar() {
   
   // Nur für Admins anzeigen
   const isAdmin = session?.user && (session.user as any).role === 'admin';
+  const isModerator = session?.user && (session.user as any).role === 'moderator';
 
   // Load demo mode state on mount
   useEffect(() => {
@@ -67,8 +68,10 @@ export function AdminSidebar() {
   const navItems = [
     { href: "/", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/liked", icon: Heart, label: "Gelikte Bilder" },
-    ...(isAdmin ? [
+    ...((isAdmin || isModerator) ? [
       { href: "/admin/analytics", icon: BarChart3, label: "Analytics" },
+    ] : []),
+    ...(isAdmin ? [
       { href: "/admin/users", icon: Users, label: "User Management" },
     ] : []),
     { href: "/admin/settings", icon: Settings, label: "Settings" },

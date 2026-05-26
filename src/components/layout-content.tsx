@@ -24,7 +24,7 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
         hasSession && rightSidebarOpen && "md:pr-80"
       )}
     >
-      <main className="flex-1 w-full px-2 md:px-4 lg:px-6">{children}</main>
+      <main className="flex-1 w-full px-2 md:px-4 lg:px-6 overflow-x-hidden">{children}</main>
       <footer className="border-t border-border bg-card/30 py-4 text-center text-xs md:text-sm text-muted-foreground mt-auto">
         © {new Date().getFullYear()} {env.client.NEXT_PUBLIC_APP_NAME}
       </footer>

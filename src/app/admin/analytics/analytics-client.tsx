@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Heart, Upload, ImageIcon, Users, HardDrive, TrendingUp, Clock, Download, X } from "lucide-react";
+import { Heart, Upload, ImageIcon, Users, HardDrive, TrendingUp, Clock, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { env } from "@/lib/env";
 import { buildImageUrl, getImageVariantKey } from "@/lib/image-variants-utils";
@@ -216,13 +216,13 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
-      <div className="flex gap-1 bg-muted/50 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-muted/50 rounded-lg p-1 w-full">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+              "flex flex-1 justify-center items-center gap-1.5 px-2 sm:px-4 py-2 rounded-md text-sm font-medium transition-all",
               activeTab === tab.id
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -334,13 +334,11 @@ export function AnalyticsClient({ data }: { data: AnalyticsData }) {
                         username={like.username}
                         size={32}
                       />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm">
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <p className="text-sm break-words">
                           <span className="font-medium">{like.username}</span>
                           {" "}hat{" "}
-                          <span className="font-medium truncate">
-                            {like.imageName}
-                          </span>
+                          <span className="font-medium">{like.imageName}</span>
                           {" "}geliked
                         </p>
                         <p className="text-xs text-muted-foreground">

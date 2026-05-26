@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import { X, Heart } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -8,8 +8,6 @@ import type { ImageWithTags } from "@/lib/db";
 import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
 import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
-import { getDemoImageUrl } from "@/lib/demo-mode";
-
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
 type LikeInfo = {
@@ -40,9 +38,8 @@ export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps)
   const [slideOffset, setSlideOffset] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [preloadedImages, setPreloadedImages] = useState<ImageWithTags[]>([]);
-  // Local map to track like status across navigation (survives back/forth swiping)
+  const [allImagesSeen, setAllImagesSeen] = useState(false);
   const likedMapRef = useRef<Map<string, boolean>>(new Map());
-  // Cache for like data (count + likers) - avoids delay on navigation
   const likeDataCacheRef = useRef<Map<string, { likeCount: number; likers: LikeInfo[] }>>(new Map());
   const prefetchingRef = useRef<Set<string>>(new Set());
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -50,66 +47,31 @@ export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps)
   const lastTapRef = useRef<number>(0);
   const currentUserId = (session?.user as any)?.id;
 
-  // Get next 10 images from history or new randoms
   const getPreloadImages = (): ImageWithTags[] => {
     const preloads: ImageWithTags[] = [];
     const currentViewed = new Set(viewedImageIds);
-    
-    // Start from next index in history
-    let startIndex = historyIndex + 1;
-    
-    // First, add from existing history
-    for (let i = startIndex; i < imageHistory.length && preloads.length < 10; i++) {
+    for (let i = historyIndex + 1; i < imageHistory.length && preloads.length < 10; i++) {
       preloads.push(imageHistory[i]);
     }
-    
-    // Fill remaining with random images
     while (preloads.length < 10) {
       const randomImg = getRandomImage(currentViewed);
-      if (randomImg && !preloads.find(img => img.id === randomImg.id)) {
+      if (!randomImg) break;
+      if (!preloads.find(img => img.id === randomImg.id)) {
         preloads.push(randomImg);
         currentViewed.add(randomImg.id);
       } else {
-        break; // No more unique images available
+        break;
       }
     }
-    
     return preloads;
   };
 
-  // Get random image that hasn't been viewed yet
   const getRandomImage = (currentViewedIds: Set<string>) => {
-    // Filter out already viewed images
     const unviewedImages = images.filter(img => !currentViewedIds.has(img.id));
-    
     if (unviewedImages.length === 0) {
-      // All images have been viewed, reset the viewed list
       return images.length > 0 ? images[Math.floor(Math.random() * images.length)] : null;
     }
-    
-    const randomIndex = Math.floor(Math.random() * unviewedImages.length);
-    return unviewedImages[randomIndex];
-  };
-
-  // Preload next images for smooth UX
-  const preloadNextImages = () => {
-    const imagesToPreload: ImageWithTags[] = [];
-    const currentViewed = new Set(viewedImageIds);
-    
-    // If we're at the end of history, preload 10 new random images
-    if (historyIndex === imageHistory.length - 1) {
-      for (let i = 0; i < 10; i++) {
-        const nextImg = getRandomImage(currentViewed);
-        if (nextImg && !imagesToPreload.find(img => img.id === nextImg.id)) {
-          imagesToPreload.push(nextImg);
-          currentViewed.add(nextImg.id); // Mark as viewed in local copy
-        }
-      }
-      
-      if (imagesToPreload.length > 0) {
-        setImageHistory(prev => [...prev, ...imagesToPreload]);
-      }
-    }
+    return unviewedImages[Math.floor(Math.random() * unviewedImages.length)];
   };
 
   // Apply cached like data for an image instantly
@@ -157,7 +119,16 @@ export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps)
 
   // Navigate to next image (swipe up)
   const goToNextImage = () => {
-    // Check if we can go forward in history
+    // Check first: have all unique images been seen?
+    // viewedImageIds is async state, so manually include currentImage
+    const effectiveViewed = new Set(viewedImageIds);
+    if (currentImage) effectiveViewed.add(currentImage.id);
+    if (images.length > 0 && images.every(img => effectiveViewed.has(img.id))) {
+      setAllImagesSeen(true);
+      return;
+    }
+
+    // Navigate forward in history if possible
     if (historyIndex < imageHistory.length - 1) {
       const nextIndex = historyIndex + 1;
       const nextImg = imageHistory[nextIndex];
@@ -166,8 +137,7 @@ export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps)
       applyCachedLikeData(nextImg.id, nextImg.is_liked ?? false);
       setIsImageLoading(true);
     } else {
-      // Get a new random image
-      const newImage = getRandomImage(viewedImageIds);
+      const newImage = getRandomImage(effectiveViewed);
       if (newImage) {
         setImageHistory(prev => [...prev, newImage]);
         setHistoryIndex(prev => prev + 1);
@@ -186,27 +156,28 @@ export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps)
     const imagesAhead = imageHistory.length - (historyIndex + 1);
     
     if (imagesAhead < 10) {
-      const currentViewed = new Set(viewedImageIds);
-      const newImages: ImageWithTags[] = [];
-      const neededImages = 10 - imagesAhead;
-      
-      // Add existing images to viewed set
-      imageHistory.forEach(img => currentViewed.add(img.id));
-      
-      // Generate new random images
-      for (let i = 0; i < neededImages; i++) {
-        const randomImg = getRandomImage(currentViewed);
-        if (randomImg && !newImages.find(img => img.id === randomImg.id)) {
-          newImages.push(randomImg);
-          currentViewed.add(randomImg.id);
-        } else {
-          break;
+      const historyIds = new Set(imageHistory.map(img => img.id));
+      // Stop if all unique images are already in history (prevents infinite loop with few images)
+      if (historyIds.size < images.length) {
+        const currentViewed = new Set(viewedImageIds);
+        imageHistory.forEach(img => currentViewed.add(img.id));
+        const newImages: ImageWithTags[] = [];
+        const neededImages = 10 - imagesAhead;
+
+        for (let i = 0; i < neededImages; i++) {
+          const randomImg = getRandomImage(currentViewed);
+          if (randomImg && !historyIds.has(randomImg.id) && !newImages.find(img => img.id === randomImg.id)) {
+            newImages.push(randomImg);
+            currentViewed.add(randomImg.id);
+            historyIds.add(randomImg.id);
+          } else {
+            break;
+          }
         }
-      }
-      
-      // Add new images to history
-      if (newImages.length > 0) {
-        setImageHistory(prev => [...prev, ...newImages]);
+
+        if (newImages.length > 0) {
+          setImageHistory(prev => [...prev, ...newImages]);
+        }
       }
     }
     
@@ -244,6 +215,8 @@ export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps)
         if (nextImg && !initialImages.find(existing => existing.id === nextImg.id)) {
           initialImages.push(nextImg);
           currentViewed.add(nextImg.id);
+        } else {
+          break;
         }
       }
       
@@ -253,13 +226,6 @@ export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps)
     }
   }, []);
 
-  // Preload next images when user gets close to the end
-  useEffect(() => {
-    // When user is 5 images away from the end, preload more
-    if (historyIndex >= imageHistory.length - 5) {
-      preloadNextImages();
-    }
-  }, [historyIndex, imageHistory.length]);
 
 
 
@@ -499,6 +465,30 @@ export function InstaMode({ images, onClose, demoMode = false }: InstaModeProps)
 
   if (!currentImage) {
     return null;
+  }
+
+  if (allImagesSeen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center gap-6 animate-in fade-in duration-200">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 h-12 w-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-all"
+        >
+          <X className="h-6 w-6" />
+        </button>
+        <Heart className="h-16 w-16 text-red-500 fill-red-500 opacity-50" />
+        <div className="text-center px-8">
+          <h2 className="text-white text-2xl font-semibold mb-2">Alle Bilder gesehen!</h2>
+          <p className="text-white/60 text-sm">Aktuell gibt es keine weiteren Bilder zum Anschauen.</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-2 px-6 py-3 rounded-full bg-white text-black font-medium hover:bg-white/90 transition-colors"
+        >
+          Zurück zur Galerie
+        </button>
+      </div>
+    );
   }
 
   // Helper to get image seed from ID (consistent random seed)

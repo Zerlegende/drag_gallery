@@ -30,8 +30,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import { Trash2, Shield, User as UserIcon, Plus, Upload as UploadIcon, Pencil, Eye, EyeOff } from "lucide-react";
+import { Trash2, Shield, User as UserIcon, Plus, Upload as UploadIcon, Pencil, Eye, EyeOff, MoreVertical, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type User = {
   id: string;
@@ -67,7 +68,7 @@ export function UserManagementClient({
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
-  async function handleCreateUser(e: React.FormEvent) {
+  async function handleCreateUser(e: React.SyntheticEvent) {
     e.preventDefault();
     setCreating(true);
 
@@ -115,7 +116,7 @@ export function UserManagementClient({
     }
   }
 
-  async function handleDelete(userId: string, username: string) {
+  async function handleDelete(userId: string) {
     setLoading(userId);
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
@@ -135,7 +136,7 @@ export function UserManagementClient({
 
   const confirmDelete = () => {
     if (deleteConfirmUser) {
-      handleDelete(deleteConfirmUser.id, deleteConfirmUser.username);
+      handleDelete(deleteConfirmUser.id);
       setDeleteConfirmUser(null);
     }
   };
@@ -203,7 +204,7 @@ export function UserManagementClient({
     setPasswordDialogOpen(true);
   }
 
-  async function handleUpdateUsername(e: React.FormEvent) {
+  async function handleUpdateUsername(e: React.SyntheticEvent) {
     e.preventDefault();
     if (!selectedUserId || !editUsername.trim()) return;
 
@@ -232,7 +233,7 @@ export function UserManagementClient({
     }
   }
 
-  async function handleUpdatePassword(e: React.FormEvent) {
+  async function handleUpdatePassword(e: React.SyntheticEvent) {
     e.preventDefault();
     if (!selectedUserId || !newPassword.trim()) return;
 
@@ -380,8 +381,8 @@ export function UserManagementClient({
             <TableHead>Avatar</TableHead>
             <TableHead>Username</TableHead>
             <TableHead>Role</TableHead>
-            <TableHead>Erstellt am</TableHead>
-            <TableHead className="text-right">Aktionen</TableHead>
+            <TableHead className="hidden sm:table-cell">Erstellt am</TableHead>
+            <TableHead className="w-10"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -415,83 +416,70 @@ export function UserManagementClient({
                   )}
                 </TableCell>
                 <TableCell>
-                  <Select
-                    value={user.role}
-                    onValueChange={(value: string) => handleRoleChange(user.id, value)}
-                    disabled={isCurrentUser || isLoading}
-                  >
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">
-                        <div className="flex items-center gap-2">
-                          <Shield className="h-3 w-3" />
-                          Admin
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="moderator">
-                        <div className="flex items-center gap-2">
-                          <Shield className="h-3 w-3 text-blue-500" />
-                          Moderator
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="user">
-                        <div className="flex items-center gap-2">
-                          <UserIcon className="h-3 w-3" />
-                          User
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isCurrentUser || isLoading}
+                        className="h-8 w-8 p-0"
+                        title={user.role}
+                      >
+                        {user.role === "admin" && <Shield className="h-4 w-4" />}
+                        {user.role === "moderator" && <Shield className="h-4 w-4 text-blue-500" />}
+                        {user.role === "user" && <UserIcon className="h-4 w-4" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={() => handleRoleChange(user.id, "admin")}>
+                        <Shield className="h-3 w-3" /> Admin
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleRoleChange(user.id, "moderator")}>
+                        <Shield className="h-3 w-3 text-blue-500" /> Moderator
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleRoleChange(user.id, "user")}>
+                        <UserIcon className="h-3 w-3" /> User
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="hidden sm:table-cell text-muted-foreground">
                   {new Date(user.created_at).toLocaleDateString("de-DE")}
                 </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditDialog(user)}
-                      disabled={isLoading}
-                      title="Username bearbeiten"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openPasswordDialog(user)}
-                      disabled={isLoading}
-                      title="Passwort ändern"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                      </svg>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setDeleteConfirmUser({ id: user.id, username: user.username })}
-                      disabled={isCurrentUser || isLoading}
-                      className="text-destructive hover:text-destructive"
-                      title="User löschen"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" disabled={isLoading} className="h-8 w-8 p-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                        <Pencil className="h-4 w-4" />
+                        Username bearbeiten
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openPasswordDialog(user)}>
+                        <KeyRound className="h-4 w-4" />
+                        Passwort ändern
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openAvatarDialog(user.id)}>
+                        <UserIcon className="h-4 w-4" />
+                        Avatar ändern
+                      </DropdownMenuItem>
+                      {!isCurrentUser && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setDeleteConfirmUser({ id: user.id, username: user.username })}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Löschen
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             );

@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-import { auth, isAdminOrModerator } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { isMaintenanceMode } from "@/lib/maintenance";
 import { getAllTags, getImagesWithTags, getArchiveById } from "@/lib/db";
 import { GalleryShell } from "@/components/gallery/gallery-shell";
@@ -53,7 +53,7 @@ export default async function ArchivePage({ params, searchParams }: Props) {
         <div className="mb-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+            className="flex md:inline-flex justify-center items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
             Zurück zur Galerie

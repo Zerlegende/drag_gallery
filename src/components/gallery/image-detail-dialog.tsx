@@ -258,7 +258,7 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
                 }}
                 onFocus={() => setShowSuggestions(true)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && isDemoMode && tagSearchInput.trim()) {
+                  if (e.key === 'Enter' && tagSearchInput.trim()) {
                     e.preventDefault();
                     handleCreateAndAddTag();
                   }
@@ -282,17 +282,20 @@ export function ImageDetailDialog({ image, onOpenChange, onSave, onRotate, avail
                 </div>
               )}
 
-              {/* No results message or demo mode hint */}
+              {/* No results message or create option */}
               {showSuggestions && tagSearchInput && suggestions.length === 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg p-3 text-sm text-muted-foreground">
-                  {isDemoMode ? (
-                    <>
-                      <div className="font-medium text-foreground mb-1">Demo-Modus</div>
-                      Drücke Enter um &quot;{tagSearchInput}&quot; als Demo-Tag hinzuzufügen. Änderungen werden nicht gespeichert.
-                    </>
-                  ) : (
-                    "Kein existierender Tag gefunden. Nur vorhandene Tags können hinzugefügt werden."
-                  )}
+                <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg shadow-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={handleCreateAndAddTag}
+                    className="w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground transition-colors text-sm"
+                  >
+                    {isDemoMode ? (
+                      <><span className="text-muted-foreground">Demo: </span>&quot;{tagSearchInput}&quot; hinzufügen</>
+                    ) : (
+                      <>&quot;{tagSearchInput}&quot; erstellen und hinzufügen</>
+                    )}
+                  </button>
                 </div>
               )}
             </div>

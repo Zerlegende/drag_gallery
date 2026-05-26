@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Heart, X, Download } from "lucide-react";
+import { Heart, Download, LayoutGrid, List } from "lucide-react";
 import type { ImageWithTags, TagRecord } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { env } from "@/lib/env";
@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { ImageDetailDialog } from "@/components/gallery/image-detail-dialog";
 import { ImageFullscreenMobile } from "@/components/gallery/image-fullscreen-mobile";
 import { getImageVariantKey, buildImageUrl } from "@/lib/image-variants-utils";
+
+type ViewMode = "grid" | "list";
 
 const BASE_URL = env.client.NEXT_PUBLIC_MINIO_BASE_URL;
 
@@ -22,6 +24,7 @@ export function LikedGalleryView({ images, availableTags }: LikedGalleryViewProp
   const [selectedImage, setSelectedImage] = useState<ImageWithTags | null>(null);
   const [localImages, setLocalImages] = useState(images);
   const [isMobile, setIsMobile] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
   // Detect mobile screen size
   useEffect(() => {
@@ -117,16 +120,55 @@ export function LikedGalleryView({ images, availableTags }: LikedGalleryViewProp
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        {localImages.map((image) => (
-          <LikedImageCard
-            key={image.id}
-            image={image}
-            onSelect={() => setSelectedImage(image)}
-            onUnlike={(e) => handleUnlike(image.id, e)}
-          />
-        ))}
+      {/* View Toggle */}
+      <div className="flex justify-end mb-4">
+        <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
+          <button
+            onClick={() => setViewMode("grid")}
+            className={cn(
+              "p-2 rounded-md transition-all",
+              viewMode === "grid" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+            title="Rasteransicht"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={cn(
+              "p-2 rounded-md transition-all",
+              viewMode === "list" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+            title="Listenansicht"
+          >
+            <List className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+
+      {viewMode === "grid" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {localImages.map((image) => (
+            <LikedImageCard
+              key={image.id}
+              image={image}
+              onSelect={() => setSelectedImage(image)}
+              onUnlike={(e) => handleUnlike(image.id, e)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {localImages.map((image) => (
+            <LikedImageListRow
+              key={image.id}
+              image={image}
+              onSelect={() => setSelectedImage(image)}
+              onUnlike={(e) => handleUnlike(image.id, e)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Desktop: Detail Dialog mit allen Funktionen */}
       {!isMobile && selectedImage && (
@@ -183,6 +225,94 @@ type LikedImageCardProps = {
   onUnlike: (e: React.MouseEvent) => void;
 };
 
+function LikedImageListRow({ image, onSelect, onUnlike }: LikedImageCardProps) {
+  const [isUnliking, setIsUnliking] = useState(false);
+
+  const handleUnlikeClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsUnliking(true);
+    onUnlike(e);
+    setIsUnliking(false);
+  };
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const imageUrl = `${process.env.NEXT_PUBLIC_MINIO_BASE_URL}/${image.key}`;
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = image.imagename || image.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading image:", error);
+    }
+  };
+
+  const fallback = `https://dummyimage.com/600x400/1e293b/ffffff&text=${encodeURIComponent(image.filename)}`;
+  const timestamp = image.updated_at || image.created_at;
+  const gridVariantKey = getImageVariantKey(image.key, 'grid', image.variant_status);
+  const imageUrl = buildImageUrl(BASE_URL, gridVariantKey, fallback, timestamp);
+
+  return (
+    <article
+      onClick={onSelect}
+      className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+    >
+      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
+        <Image
+          src={imageUrl}
+          alt={image.filename}
+          fill
+          className="object-cover"
+          sizes="56px"
+        />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="font-medium truncate text-sm">
+          {image.imagename || image.filename}
+        </p>
+        {image.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {image.tags.slice(0, 4).map((tag) => (
+              <Badge key={tag.id} variant="secondary" className="text-xs">
+                {tag.name}
+              </Badge>
+            ))}
+            {image.tags.length > 4 && (
+              <Badge variant="outline" className="text-xs">+{image.tags.length - 4}</Badge>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={handleDownload}
+          className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          title="Herunterladen"
+        >
+          <Download className="h-4 w-4" />
+        </button>
+        <button
+          onClick={handleUnlikeClick}
+          disabled={isUnliking}
+          className="rounded-full p-2 text-red-500 hover:bg-accent transition-colors"
+          title="Unlike"
+        >
+          <Heart className={cn("h-4 w-4 fill-red-500", isUnliking && "opacity-50")} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function LikedImageCard({ image, onSelect, onUnlike }: LikedImageCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isUnliking, setIsUnliking] = useState(false);
@@ -190,7 +320,7 @@ function LikedImageCard({ image, onSelect, onUnlike }: LikedImageCardProps) {
   const handleUnlikeClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsUnliking(true);
-    await onUnlike(e);
+    onUnlike(e);
     setIsUnliking(false);
   };
 

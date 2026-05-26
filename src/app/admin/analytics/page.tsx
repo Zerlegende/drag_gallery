@@ -9,7 +9,7 @@ export type { UserUploadStats, UserLikeStats, RecentLike, TopLikedImage };
 export default async function AnalyticsPage() {
   const session = await auth();
 
-  if (!session?.user || (session.user as any).role !== "admin") {
+  if (!session?.user || !["admin", "moderator"].includes((session.user as any).role)) {
     redirect("/");
   }
 
