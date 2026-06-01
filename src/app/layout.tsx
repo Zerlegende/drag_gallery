@@ -7,6 +7,10 @@ import { AppProviders } from "@/app/providers";
 import { env } from "@/lib/env";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { LayoutContent } from "@/components/layout-content";
+import { UploadQueueProvider } from "@/contexts/upload-queue-context";
+import { UploadQueueWidget } from "@/components/upload-queue-widget";
+import { GlobalDragDrop } from "@/components/global-drag-drop";
+import { GlobalUploadDialog } from "@/components/global-upload-dialog";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -27,10 +31,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="de" suppressHydrationWarning>
       <body className={inter.className}>
         <AppProviders>
-          <div className="flex min-h-screen bg-background">
-            <AdminSidebar />
-            <LayoutContent>{children}</LayoutContent>
-          </div>
+          <UploadQueueProvider>
+            <div className="flex min-h-screen bg-background">
+              <AdminSidebar />
+              <LayoutContent>{children}</LayoutContent>
+            </div>
+            <UploadQueueWidget />
+            <GlobalDragDrop />
+            <GlobalUploadDialog />
+          </UploadQueueProvider>
         </AppProviders>
       </body>
     </html>

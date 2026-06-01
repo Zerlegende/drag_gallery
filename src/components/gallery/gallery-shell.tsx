@@ -29,7 +29,6 @@ import { ImageFullscreenMobile } from "@/components/gallery/image-fullscreen-mob
 import { InstaMode } from "@/components/gallery/insta-mode";
 import { ContainerPanel } from "@/components/gallery/container-panel";
 import { RotationQueue, type QueueItem } from "@/components/gallery/rotation-queue";
-import { ProcessingStatusIndicator } from "@/components/gallery/processing-status-indicator";
 import { DownloadFormatDialog } from "@/components/gallery/download-format-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -78,7 +77,14 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [], archi
   const [isMobile, setIsMobile] = useState(false); // Track mobile screen
   const [showInstaMode, setShowInstaMode] = useState(false); // Track Insta-Mode
   const [rotationQueue, setRotationQueue] = useState<QueueItem[]>([]);
-  const isProcessingQueue = useRef(false); // Track if queue is currently being processed
+  const isProcessingQueue = useRef(false);
+
+  // Refresh gallery when an upload completes processing
+  useEffect(() => {
+    const refresh = () => router.refresh();
+    window.addEventListener("gallery-upload-complete", refresh);
+    return () => window.removeEventListener("gallery-upload-complete", refresh);
+  }, [router]);
   const draggedImagesRef = useRef<string[]>([]);
   const hasLoadedPage = useRef(false); // Track ob die Seite bereits aus sessionStorage geladen wurde
   const prevFilterTags = useRef<string[]>(initialFilter);
@@ -1432,9 +1438,6 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [], archi
           );
         }}
       />
-
-      {/* Processing Status Indicator */}
-      <ProcessingStatusIndicator />
 
       {/* Archiv-Dialog */}
       <Dialog open={showMoveToArchiveDialog} onOpenChange={setShowMoveToArchiveDialog}>

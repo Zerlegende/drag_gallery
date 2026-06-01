@@ -2,30 +2,14 @@
 
 import { useCallback, useState, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { formatFileSize } from "@/lib/utils";
-import { X, Loader2 } from "lucide-react";
 import Image from "next/image";
-import { useToast } from "@/components/ui/toast";
-
-type UploadMetadata = {
-  filename: string;
-  size: number;
-  mime: string;
-};
-
-export type UploadRequest = {
-  file: File;
-  tags: string[];
-  metadata: UploadMetadata;
-};
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { formatFileSize } from "@/lib/utils";
+import { useUploadQueue } from "@/contexts/upload-queue-context";
 
 export type UploadDropzoneProps = {
-  isUploading: boolean;
-  onUpload: (payload: UploadRequest[]) => Promise<void>;
-  onUploadStart?: () => void;
+  onClose: () => void;
   initialFiles?: File[];
 };
 
@@ -35,76 +19,36 @@ type FileWithPreview = {
   id: string;
 };
 
-export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFiles }: UploadDropzoneProps) {
-  const [queuedFiles, setQueuedFiles] = useState<FileWithPreview[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [initialFilesProcessed, setInitialFilesProcessed] = useState(false);
-  const { showToast } = useToast();
+export function UploadDropzone({ onClose, initialFiles }: UploadDropzoneProps) {
+  const { addFiles } = useUploadQueue();
+  const [queued, setQueued] = useState<FileWithPreview[]>([]);
 
-  // Initial files hinzufügen wenn vorhanden
   useEffect(() => {
-    if (initialFiles && initialFiles.length > 0 && !initialFilesProcessed) {
-      const filesWithPreviews = initialFiles.map((file) => ({
+    if (initialFiles && initialFiles.length > 0) {
+      setQueued(initialFiles.map(file => ({
         file,
         preview: URL.createObjectURL(file),
-        id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
-      }));
-      setQueuedFiles(filesWithPreviews);
-      setInitialFilesProcessed(true);
+        id: `${file.name}-${file.size}-${Math.random()}`,
+      })));
     }
-    
-    // Reset wenn keine initialFiles mehr da sind
-    if (!initialFiles || initialFiles.length === 0) {
-      if (initialFilesProcessed) {
-        setQueuedFiles([]);
-        setInitialFilesProcessed(false);
-      }
-    }
-  }, [initialFiles, initialFilesProcessed]);
+  }, []);
 
-  const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: any[]) => {
-      // Check for file limit violations
-      if (rejectedFiles.length > 0) {
-        const tooManyFiles = rejectedFiles.some(rejection => 
-          rejection.errors.some((e: any) => e.code === 'too-many-files')
-        );
-        if (tooManyFiles) {
-          setError('Maximal 50 Bilder auf einmal hochladen');
-          showToast('error', 'Maximal 50 Bilder auf einmal hochladen');
-          return;
-        }
-      }
-
-      const totalFiles = queuedFiles.length + acceptedFiles.length;
-      if (totalFiles > 50) {
-        setError('Maximal 50 Bilder auf einmal hochladen');
-        showToast('error', 'Maximal 50 Bilder auf einmal hochladen');
-        return;
-      }
-
-      const filesWithPreviews = acceptedFiles.map((file) => ({
-        file,
-        preview: URL.createObjectURL(file),
-        id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
-      }));
-      setQueuedFiles((prev) => [...prev, ...filesWithPreviews]);
-      setError(null);
-    },
-    [queuedFiles.length, showToast],
-  );
-
-  // Cleanup previews on unmount
   useEffect(() => {
-    return () => {
-      queuedFiles.forEach((item) => URL.revokeObjectURL(item.preview));
-    };
-  }, [queuedFiles]);
+    return () => queued.forEach(i => URL.revokeObjectURL(i.preview));
+  }, [queued]);
+
+  const onDrop = useCallback((accepted: File[]) => {
+    const newItems = accepted.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+      id: `${file.name}-${file.size}-${Math.random()}`,
+    }));
+    setQueued(prev => [...prev, ...newItems]);
+  }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
-    maxFiles: 50,
     accept: {
       "image/jpeg": [".jpg", ".jpeg"],
       "image/png": [".png"],
@@ -115,161 +59,18 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
     },
   });
 
-  const handleUpload = async () => {
-    setError(null);
-    onUploadStart?.(); // Signalisiere Start des Uploads
-    
-    try {
-      // 1. Prüfe auf Duplikate
-      const duplicateCheck = await fetch("/api/images/check-duplicates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          files: queuedFiles.map((item) => ({
-            filename: item.file.name,
-            size: item.file.size,
-          })),
-        }),
-      });
-
-      if (!duplicateCheck.ok) {
-        throw new Error("Duplikat-Prüfung fehlgeschlagen");
-      }
-
-      const { results } = await duplicateCheck.json();
-      
-      // Filtere Duplikate heraus
-      const duplicates = results.filter((r: { exists: boolean }) => r.exists);
-      const filesToUpload = queuedFiles.filter((item) => {
-        const isDuplicate = results.find(
-          (r: { filename: string; exists: boolean }) => 
-            r.filename === item.file.name && r.exists
-        );
-        return !isDuplicate;
-      });
-
-      // Zeige Info über Duplikate
-      if (duplicates.length > 0) {
-        showToast(
-          "warning",
-          `${duplicates.length} Bild(er) bereits vorhanden und wurden übersprungen.`,
-          5000
-        );
-      }
-
-      // Wenn alle Duplikate sind
-      if (filesToUpload.length === 0) {
-        queuedFiles.forEach((item) => URL.revokeObjectURL(item.preview));
-        setQueuedFiles([]);
-        await onUpload([]);
-        return;
-      }
-
-      // 2. Upload der neuen Bilder
-      let successCount = 0;
-      let failedCount = 0;
-      const failedFiles: string[] = [];
-      
-      for (const item of filesToUpload) {
-        try {
-          // 1. Hole presigned URL (upload original file as-is)
-          const uploadResponse = await fetch("/api/upload", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              filename: item.file.name,
-              mime: item.file.type,
-              size: item.file.size,
-            }),
-          });
-
-          if (!uploadResponse.ok) {
-            throw new Error(`Presigned URL konnte nicht erstellt werden`);
-          }
-
-          const { url, fields, objectKey } = await uploadResponse.json();
-
-          // 2. Upload zu MinIO (original format — AVIF conversion happens server-side)
-          const formData = new FormData();
-          Object.entries(fields).forEach(([key, value]) => {
-            formData.append(key, value as string);
-          });
-          formData.append("file", item.file);
-
-          const minioResponse = await fetch(url, {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!minioResponse.ok) {
-            throw new Error(`Upload zu MinIO fehlgeschlagen (${minioResponse.status})`);
-          }
-
-          // 3. Speichere Metadaten in DB (triggers background AVIF conversion + variant generation)
-          const metadataResponse = await fetch("/api/images", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              filename: item.file.name,
-              key: objectKey,
-              mime: item.file.type,
-              size: item.file.size,
-              tags: [],
-            }),
-          });
-
-          if (!metadataResponse.ok) {
-            throw new Error(`Metadaten konnten nicht gespeichert werden`);
-          }
-          
-          successCount++;
-        } catch (fileError) {
-          // Fehler für dieses Bild loggen, aber weitermachen
-          console.error(`Fehler beim Upload von ${item.file.name}:`, fileError);
-          failedCount++;
-          failedFiles.push(item.file.name);
-        }
-      }
-
-      // Cleanup und Success
-      queuedFiles.forEach((item) => URL.revokeObjectURL(item.preview));
-      setQueuedFiles([]);
-      
-      // Zeige Ergebnis-Nachricht
-      if (successCount > 0 && failedCount === 0) {
-        showToast("success", `${successCount} Bild(er) erfolgreich hochgeladen.`, 3000);
-      } else if (successCount > 0 && failedCount > 0) {
-        showToast(
-          "warning", 
-          `${successCount} Bild(er) hochgeladen, ${failedCount} übersprungen (${failedFiles.join(', ')}).`, 
-          7000
-        );
-      } else if (failedCount > 0) {
-        showToast(
-          "error", 
-          `Alle ${failedCount} Bilder konnten nicht hochgeladen werden.`, 
-          7000
-        );
-      }
-      
-      // Rufe die Success-Callback auf (auch wenn nicht alle erfolgreich waren)
-      await onUpload([]);
-    } catch (uploadError) {
-      // Nur kritische Fehler die den ganzen Prozess stoppen
-      console.error('Critical Upload Error:', uploadError);
-      const errorMessage = uploadError instanceof Error ? uploadError.message : "Upload fehlgeschlagen.";
-      setError(errorMessage);
-      showToast("error", errorMessage, 7000);
-      throw uploadError;
-    }
+  const removeFile = (id: string) => {
+    setQueued(prev => {
+      const item = prev.find(i => i.id === id);
+      if (item) URL.revokeObjectURL(item.preview);
+      return prev.filter(i => i.id !== id);
+    });
   };
 
-  const removeFile = (index: number) => {
-    setQueuedFiles((prev) => {
-      const item = prev[index];
-      URL.revokeObjectURL(item.preview);
-      return prev.filter((_, i) => i !== index);
-    });
+  const handleUpload = () => {
+    if (queued.length === 0) return;
+    addFiles(queued.map(i => i.file));
+    onClose();
   };
 
   return (
@@ -280,61 +81,31 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
         })}
       >
         <input {...getInputProps()} />
-        
-        {queuedFiles.length === 0 ? (
+
+        {queued.length === 0 ? (
           <div className="flex min-h-[300px] flex-col items-center justify-center gap-2 text-center">
             <p className="text-lg font-medium">
-              {isDragActive ? "Loslassen zum Hochladen" : "Dateien hier ablegen oder klicken"}
+              {isDragActive ? "Loslassen zum Hinzufügen" : "Dateien hier ablegen oder klicken"}
             </p>
-            <p className="text-sm text-muted-foreground">
-              Unterstützt: JPEG, PNG, HEIC, WebP, GIF, AVIF
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Max. 50MB pro Datei
-            </p>
+            <p className="text-sm text-muted-foreground">JPEG, PNG, HEIC, WebP, AVIF · max. 50 MB</p>
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="text-center py-4">
-              <p className="text-lg font-medium">
-                {isDragActive ? "Weitere Bilder hinzufügen" : "Klicken oder ziehen für weitere Bilder"}
-              </p>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mt-2">
-                {queuedFiles.length} {queuedFiles.length === 1 ? 'Bild' : 'Bilder'} in Warteschlange
-              </p>
-            </div>
-            
+            <p className="text-center text-sm text-muted-foreground">
+              {isDragActive ? "Weitere Bilder hinzufügen" : "Klicken oder ziehen für weitere Bilder"} · {queued.length} {queued.length === 1 ? "Bild" : "Bilder"}
+            </p>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-              {queuedFiles.map((item, index) => (
-                <div 
-                  key={item.id} 
+              {queued.map((item) => (
+                <div
+                  key={item.id}
                   className="group relative aspect-square rounded-lg overflow-hidden border border-border bg-muted"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={e => e.stopPropagation()}
                 >
-                  <Image
-                    src={item.preview}
-                    alt={item.file.name}
-                    fill
-                    className="object-cover pointer-events-none"
-                    unoptimized
-                  />
+                  <Image src={item.preview} alt={item.file.name} fill className="object-cover pointer-events-none" unoptimized />
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2">
-                    <p className="text-white text-xs font-medium text-center truncate w-full mb-1">
-                      {item.file.name}
-                    </p>
-                    <p className="text-white/80 text-xs mb-2">
-                      {formatFileSize(item.file.size)}
-                    </p>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFile(index);
-                      }}
-                      disabled={isUploading}
-                      className="h-8 w-8 p-0"
-                    >
+                    <p className="text-white text-xs font-medium text-center truncate w-full mb-1">{item.file.name}</p>
+                    <p className="text-white/80 text-xs mb-2">{formatFileSize(item.file.size)}</p>
+                    <Button variant="destructive" size="sm" onClick={() => removeFile(item.id)} className="h-8 w-8 p-0">
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -344,15 +115,12 @@ export function UploadDropzone({ isUploading, onUpload, onUploadStart, initialFi
           </div>
         )}
       </div>
-      
+
       <div className="flex justify-end">
-        <Button size="lg" disabled={isUploading || queuedFiles.length === 0} onClick={handleUpload}>
-          {isUploading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          {isUploading ? "Lade hoch..." : `Jetzt hochladen (${queuedFiles.length})`}
+        <Button size="lg" disabled={queued.length === 0} onClick={handleUpload}>
+          {queued.length === 0 ? "Hochladen" : `${queued.length} Bild${queued.length === 1 ? "" : "er"} hochladen`}
         </Button>
       </div>
-      
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }
