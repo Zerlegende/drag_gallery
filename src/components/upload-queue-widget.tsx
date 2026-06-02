@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, ChevronDown, ChevronUp, Upload, CheckCircle2, AlertCircle, Loader2, ImageIcon, Maximize2, Minimize2 } from "lucide-react";
+import { X, ChevronDown, ChevronUp, Upload, CheckCircle2, AlertCircle, Loader2, ImageIcon, Maximize2, Minimize2, RotateCw } from "lucide-react";
 import { useUploadQueue, type QueueItem } from "@/contexts/upload-queue-context";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +37,7 @@ function itemProgress(item: QueueItem): number {
 }
 
 export function UploadQueueWidget() {
-  const { queue, addFiles, removeItem, clearDone, queueExpanded: expanded, setQueueExpanded: setExpanded } = useUploadQueue();
+  const { queue, addFiles, removeItem, retryItem, clearDone, queueExpanded: expanded, setQueueExpanded: setExpanded } = useUploadQueue();
   const serverStatus = useServerProcessing(queue.length > 0);
   const [minimized, setMinimized] = useState(false);
   const [dropActive, setDropActive] = useState(false);
@@ -72,6 +72,7 @@ export function UploadQueueWidget() {
 
   const uploading = queue.filter(i => i.status === "uploading").length;
   const processing = queue.filter(i => i.status === "processing").length;
+  const retrying = queue.filter(i => i.status === "retrying").length;
   const done = queue.filter(i => i.status === "done" || i.status === "error").length;
   const total = queue.length;
   const allDone = queue.every(i => i.status === "done" || i.status === "error");
@@ -83,6 +84,8 @@ export function UploadQueueWidget() {
     ? `${uploading} wird hochgeladen…`
     : processing > 0
     ? `${processing} wird verarbeitet…`
+    : retrying > 0
+    ? `${retrying} wird wiederholt…`
     : `${total} in der Warteschlange`;
 
   const header = (
@@ -137,7 +140,7 @@ export function UploadQueueWidget() {
   const list = (
     <div className={cn("overflow-y-auto divide-y divide-border", expanded ? "flex-1" : "max-h-80")}>
       {queue.map(item => (
-        <QueueItemRow key={item.id} item={item} serverImage={getServerImage(item)} onRemove={() => removeItem(item.id)} expanded={expanded} />
+        <QueueItemRow key={item.id} item={item} serverImage={getServerImage(item)} onRemove={() => removeItem(item.id)} onRetry={() => retryItem(item.id)} expanded={expanded} />
       ))}
     </div>
   );
@@ -177,21 +180,33 @@ export function UploadQueueWidget() {
   );
 }
 
-function QueueItemRow({ item, serverImage, onRemove, expanded }: {
+function QueueItemRow({ item, serverImage, onRemove, onRetry, expanded }: {
   item: QueueItem;
   serverImage?: ServerImage;
   onRemove: () => void;
+  onRetry: () => void;
   expanded?: boolean;
 }) {
   const serverActive = serverImage?.variant_status === "pending" || serverImage?.variant_status === "processing";
   const serverFailed = serverImage?.variant_status === "failed";
 
   // Effective status: if server still active, override "done"
-  const isDone   = (item.status === "done" || item.status === "error") && !serverActive && !serverFailed;
-  const isFailed = (item.status === "error") || serverFailed;
+  const isDone     = item.status === "done" && !serverActive && !serverFailed;
+  const isFailed   = item.status === "error" || serverFailed;
+  const isRetrying = item.status === "retrying";
   const showUpload   = item.status === "uploading";
   const showProcess  = item.status === "processing" || (item.status === "done" && serverActive);
   const isPending    = item.status === "pending";
+
+  // Live countdown while waiting to retry
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isRetrying) return;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [isRetrying]);
+  const secondsLeft = item.retryAt ? Math.max(0, Math.ceil((item.retryAt - now) / 1000)) : 0;
+  const nextAttempt = (item.attempt ?? 0) + 1;
 
   return (
     <div className={cn("flex items-start gap-3 px-4 py-3", expanded && "py-4")}>
@@ -225,14 +240,28 @@ function QueueItemRow({ item, serverImage, onRemove, expanded }: {
           </div>
         )}
 
-        {isDone && !isFailed && (
+        {isRetrying && (
+          <p className="text-xs text-amber-600 mt-0.5">
+            Fehlgeschlagen – neuer Versuch in {secondsLeft}s (Versuch {nextAttempt}/3)
+          </p>
+        )}
+
+        {isDone && (
           <p className="text-xs text-green-600 mt-0.5 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" /> Fertig
           </p>
         )}
 
         {isFailed && (
-          <p className="text-xs text-destructive mt-0.5">{item.error ?? "Fehler"}</p>
+          <div className="mt-0.5 space-y-1.5">
+            <p className="text-xs text-destructive">{item.error ?? "Fehler"}</p>
+            <button
+              onClick={onRetry}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              <RotateCw className="h-3.5 w-3.5" /> Retry
+            </button>
+          </div>
         )}
       </div>
 
@@ -240,9 +269,10 @@ function QueueItemRow({ item, serverImage, onRemove, expanded }: {
         {isPending   && <div className="h-2 w-2 rounded-full bg-muted-foreground/40" />}
         {showUpload  && <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />}
         {showProcess && <Loader2 className="h-4 w-4 text-violet-500 animate-spin" />}
-        {isDone && !isFailed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-        {isFailed && <AlertCircle className="h-4 w-4 text-destructive" />}
-        {(isDone || isFailed) && (
+        {isRetrying  && <RotateCw className="h-4 w-4 text-amber-500 animate-spin" />}
+        {isDone      && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+        {isFailed    && <AlertCircle className="h-4 w-4 text-destructive" />}
+        {(isDone || isFailed || isRetrying) && (
           <button onClick={onRemove} className="ml-1 p-0.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
             <X className="h-3 w-3" />
           </button>
