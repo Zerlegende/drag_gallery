@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS images (
   uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
   position INT DEFAULT 0,
   variant_status VARCHAR(20) DEFAULT 'pending',
+  content_hash TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMP
 );
@@ -50,6 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_images_uploaded_by ON images(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_images_position ON images(position);
 CREATE INDEX IF NOT EXISTS idx_images_variant_status ON images(variant_status);
 CREATE INDEX IF NOT EXISTS idx_images_uploaded_by_status ON images(uploaded_by, variant_status);
+CREATE INDEX IF NOT EXISTS idx_images_content_hash ON images(content_hash);
 CREATE INDEX IF NOT EXISTS idx_image_tags_image_id ON image_tags(image_id);
 CREATE INDEX IF NOT EXISTS idx_image_tags_tag_id ON image_tags(tag_id);
 

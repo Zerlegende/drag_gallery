@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { getImageById, getImagesWithTags, upsertTags, withTransaction } from "@/lib/db";
+import { telegramNotifier } from "@/lib/telegram-notifier";
 import { variantQueue } from "@/lib/variant-queue";
 
 const bodySchema = z.object({
@@ -12,6 +13,10 @@ const bodySchema = z.object({
   mime: z.string().optional(),
   size: z.number().int().nonnegative().optional(),
   tags: z.array(z.string()).optional(),
+  // SHA-256 des Originals für die Duplikaterkennung; der Client kann ihn in
+  // unsicheren Kontexten (kein crypto.subtle) nicht berechnen – dann holt ihn
+  // die Variant-Pipeline nach.
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 
 export async function GET(request: Request) {
@@ -43,10 +48,10 @@ export async function POST(request: Request) {
 
     await client.query(
       `
-        INSERT INTO images (id, filename, key, mime, size, uploaded_by, position, variant_status)
+        INSERT INTO images (id, filename, key, mime, size, uploaded_by, position, variant_status, content_hash)
         VALUES ($1, $2, $3, $4, $5, $6, (
           SELECT COALESCE(MAX(position) + 1, 0) FROM images
-        ), 'pending')
+        ), 'pending', $7)
       `,
       [
         id,
@@ -55,6 +60,7 @@ export async function POST(request: Request) {
         parsed.data.mime ?? null,
         parsed.data.size ?? null,
         userId ?? null,
+        parsed.data.contentHash ?? null,
       ],
     );
 
@@ -72,6 +78,13 @@ export async function POST(request: Request) {
 
   // Add to variant processing queue (max 2 concurrent)
   variantQueue.add(imageId, parsed.data.key, parsed.data.mime ?? 'image/avif');
+
+  // Telegram-Report sammeln (wird gebündelt verschickt)
+  telegramNotifier.record({
+    username: session.user.name ?? "Unbekannt",
+    filename: parsed.data.filename,
+    size: parsed.data.size ?? null,
+  });
 
   const image = await getImageById(imageId);
   if (!image) {

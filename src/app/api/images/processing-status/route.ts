@@ -14,12 +14,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get user's images that are being processed
+    // Get user's images that are being processed.
+    // 'failed' muss mitgeliefert werden, sonst verschwindet ein fehlgeschlagenes
+    // Bild einfach aus der Liste und der Client meldet es als "fertig".
     const images = await query(
       `SELECT id, filename, key, variant_status, created_at
-       FROM images 
-       WHERE uploaded_by = $1 
-       AND variant_status IN ('pending', 'processing')
+       FROM images
+       WHERE uploaded_by = $1
+       AND (
+         variant_status IN ('pending', 'processing')
+         OR (variant_status = 'failed' AND created_at > NOW() - INTERVAL '1 hour')
+       )
        ORDER BY created_at DESC`,
       [session.user.id]
     );

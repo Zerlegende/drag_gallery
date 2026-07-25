@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { useUploadQueue } from "@/contexts/upload-queue-context";
-
-const ACCEPTED = ["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp", "image/avif"];
+import { dragHasImageFiles, isAcceptedFile } from "@/lib/upload-files";
 
 export function GlobalDragDrop() {
   const { queueExpanded, uploadDialogOpen, openUploadDialog } = useUploadQueue();
@@ -13,10 +12,7 @@ export function GlobalDragDrop() {
 
   const suppress = queueExpanded || uploadDialogOpen;
 
-  const hasImageFiles = (e: DragEvent) =>
-    Array.from(e.dataTransfer?.items ?? []).some(
-      item => item.kind === "file" && ACCEPTED.includes(item.type)
-    );
+  const hasImageFiles = (e: DragEvent) => dragHasImageFiles(e.dataTransfer?.items);
 
   const onDragEnter = useCallback((e: DragEvent) => {
     if (suppress || !hasImageFiles(e)) return;
@@ -39,7 +35,7 @@ export function GlobalDragDrop() {
     e.preventDefault();
     counter.current = 0;
     setDragging(false);
-    const files = Array.from(e.dataTransfer?.files ?? []).filter(f => ACCEPTED.includes(f.type));
+    const files = Array.from(e.dataTransfer?.files ?? []).filter(isAcceptedFile);
     if (files.length === 0) return;
     openUploadDialog(files);
   }, [suppress, openUploadDialog]);

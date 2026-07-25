@@ -24,6 +24,7 @@ export type ImageRecord = {
   updated_at?: string;
   position: number;
   variant_status?: string; // 'pending', 'processing', 'completed', 'failed'
+  content_hash?: string | null; // SHA-256 des Originals, für Duplikaterkennung
   liked_count?: number; // Count of likes (from JOIN)
   is_liked?: boolean;   // Whether current user liked it (from JOIN)
   archive_id?: string | null;
@@ -104,16 +105,35 @@ function mapImageRows(rows: ({ tags: string | TagRecord[] } & ImageRecord)[]) {
   });
 }
 
+/**
+ * Tags und Like-Zähler als LATERAL-Subqueries statt als Joins mit GROUP BY.
+ *
+ * Vorher wurden image_tags und likes beide an images gejoint – das ergibt pro
+ * Bild ein Kreuzprodukt aus (Anzahl Tags x Anzahl Likes) Zwischenzeilen, die
+ * DISTINCT anschließend wieder wegwerfen musste. Ein Bild mit 5 Tags und 20
+ * Likes erzeugte also 100 Zeilen statt einer.
+ */
+const TAG_AND_LIKE_JOINS = `
+  LEFT JOIN LATERAL (
+    SELECT json_agg(jsonb_build_object('id', t.id, 'name', t.name) ORDER BY t.name) AS tags
+    FROM image_tags it
+    JOIN tags t ON t.id = it.tag_id
+    WHERE it.image_id = i.id
+  ) tag_agg ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*) AS liked_count
+    FROM likes l
+    WHERE l.image_id = i.id
+  ) like_agg ON TRUE
+`;
+
 // archiveId: undefined = kein Filter, null = Hauptgalerie (ohne Archiv), string = spezifisches Archiv
 export async function getImagesWithTags(filterTags: string[] = [], userId?: string, archiveId?: string | null) {
   const params: unknown[] = [];
   let sql = `
     SELECT i.*,
-    COALESCE(
-      json_agg(DISTINCT jsonb_build_object('id', t.id, 'name', t.name))
-      FILTER (WHERE t.id IS NOT NULL), '[]'
-    ) AS tags,
-    COUNT(DISTINCT l.id) AS liked_count
+    COALESCE(tag_agg.tags, '[]'::json) AS tags,
+    COALESCE(like_agg.liked_count, 0) AS liked_count
   `;
 
   if (userId) {
@@ -125,12 +145,7 @@ export async function getImagesWithTags(filterTags: string[] = [], userId?: stri
     `;
   }
 
-  sql += `
-    FROM images i
-    LEFT JOIN image_tags it ON it.image_id = i.id
-    LEFT JOIN tags t ON t.id = it.tag_id
-    LEFT JOIN likes l ON l.image_id = i.id
-  `;
+  sql += ` FROM images i ${TAG_AND_LIKE_JOINS}`;
 
   const conditions: string[] = [];
 
@@ -156,7 +171,7 @@ export async function getImagesWithTags(filterTags: string[] = [], userId?: stri
     sql += " WHERE " + conditions.join(" AND ");
   }
 
-  sql += " GROUP BY i.id ORDER BY i.position ASC, i.created_at DESC";
+  sql += " ORDER BY i.position ASC, i.created_at DESC";
 
   const rows = await query<{ tags: string; liked_count?: string; is_liked?: boolean } & ImageRecord>(sql, params);
   return mapImageRows(rows);
@@ -239,12 +254,36 @@ export async function getAllTags() {
   return query<TagRecord>("SELECT * FROM tags ORDER BY name ASC");
 }
 
-export async function checkImageExists(filename: string, size: number): Promise<boolean> {
-  const result = await query<{ count: string }>(
-    "SELECT COUNT(*) as count FROM images WHERE filename = $1 AND size = $2",
-    [filename, size]
+export type DuplicateMatch = {
+  id: string;
+  filename: string;
+  imagename: string | null;
+  content_hash: string;
+  created_at: string;
+  archive_id: string | null;
+};
+
+/**
+ * Sucht zu einer Liste von Content-Hashes die bereits vorhandenen Bilder.
+ * Ein Treffer pro Hash (das älteste Bild) reicht für die Duplikatmeldung.
+ */
+export async function findImagesByContentHash(hashes: string[]): Promise<DuplicateMatch[]> {
+  if (hashes.length === 0) return [];
+  return query<DuplicateMatch>(
+    `SELECT DISTINCT ON (content_hash)
+       id, filename, imagename, content_hash, created_at, archive_id
+     FROM images
+     WHERE content_hash = ANY($1::text[])
+     ORDER BY content_hash, created_at ASC`,
+    [hashes]
   );
-  return parseInt(result[0]?.count || "0", 10) > 0;
+}
+
+export async function setImageContentHash(imageId: string, contentHash: string) {
+  await query(
+    "UPDATE images SET content_hash = $1 WHERE id = $2 AND content_hash IS NULL",
+    [contentHash, imageId]
+  );
 }
 
 export async function upsertTags(client: PoolClient, tagNames: string[]) {

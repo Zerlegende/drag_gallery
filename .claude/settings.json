@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npx tsc --noEmit -p tsconfig.json)",
+      "Bash(sed -i 's|from \"zod\"|from \"file:///d:/studium/bz_bilder_collector/node_modules/zod/index.js\"|' \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/envtest.mjs\")",
+      "Bash(node \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/envtest.mjs\")",
+      "Bash(npx tsc *)",
+      "Bash(node \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/run-test.js\")",
+      "Bash(node __TRACKED_VAR__/run-test.js)",
+      "PowerShell(npx next lint --file src/lib/telegram-notifier.ts --file src/lib/env.ts --file src/app/api/images/route.ts)",
+      "PowerShell(npx eslint src/lib/telegram-notifier.ts src/lib/env.ts src/app/api/images/route.ts)",
+      "PowerShell($env:DATABASE_URL=\"postgresql://u:p@localhost:5432/x\"; $env:MINIO_ENDPOINT=\"http://127.0.0.1:9000\"; $env:MINIO_BUCKET=\"b\"; $env:MINIO_ACCESS_KEY=\"k\"; $env:MINIO_SECRET_KEY=\"s\"; $env:NEXTAUTH_SECRET=\"0123456789abcdefghij\"; $env:NEXT_PUBLIC_APP_NAME=\"x\"; $env:NEXT_PUBLIC_MINIO_BUCKET=\"b\"; npm run build)",
+      "PowerShell($env:DATABASE_URL=\"postgresql://u:p@localhost:5432/x\"; $env:MINIO_ENDPOINT=\"http://127.0.0.1:9000\"; $env:MINIO_BUCKET=\"b\"; $env:MINIO_ACCESS_KEY=\"k\"; $env:MINIO_SECRET_KEY=\"s\"; $env:NEXTAUTH_SECRET=\"0123456789abcdefghij\"; $env:NEXT_PUBLIC_APP_NAME=\"x\"; $env:NEXT_PUBLIC_MINIO_BUCKET=\"b\"; npm run build 2>&1 | Select-String -Pattern \"Compiled|TypeScript|error|warn|Failed\")",
+      "Bash(node \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/hash-test.js\")",
+      "Bash(docker --version)",
+      "PowerShell($env:DATABASE_URL=\"postgresql://u:p@localhost:5432/x\"; $env:MINIO_ENDPOINT=\"http://127.0.0.1:9000\"; $env:MINIO_BUCKET=\"b\"; $env:MINIO_ACCESS_KEY=\"k\"; $env:MINIO_SECRET_KEY=\"s\"; $env:NEXTAUTH_SECRET=\"0123456789abcdefghij\"; $env:NEXT_PUBLIC_APP_NAME=\"x\"; $env:NEXT_PUBLIC_MINIO_BUCKET=\"b\"; npm run build 2>&1 | Select-String -Pattern \"Compiled|TypeScript|error|Error|Failed\")",
+      "Read(//c/Program Files/**)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(mkdir -p C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/pg)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(node sql-test.mjs)",
+      "Bash(node migration-test.mjs)",
+      "Bash(grep -vE \"^import\\\\{|^\\\\s*$\")",
+      "Bash(DATABASE_URL=\"postgresql://u:p@127.0.0.1:59999/nope\" MINIO_ENDPOINT=\"http://127.0.0.1:9000\" MINIO_BUCKET=b MINIO_ACCESS_KEY=k MINIO_SECRET_KEY=s NEXTAUTH_SECRET=0123456789abcdefghij NEXT_PUBLIC_APP_NAME=x NEXT_PUBLIC_MINIO_BUCKET=b PORT=3999 timeout 40 npx next start -p 3999)",
+      "Bash(node bench.mjs)"
+    ]
+  }
+}

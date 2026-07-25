@@ -11,21 +11,27 @@ import { Heart } from "lucide-react";
 
 // Funktion zum Laden der gelikten Bilder eines Users
 async function getLikedImages(userId: string) {
+  // Tags und Like-Zähler als LATERAL-Subqueries: als Joins mit GROUP BY ergab
+  // das pro Bild ein Kreuzprodukt aus Tags x Likes.
   const sql = `
     SELECT i.*,
-    COALESCE(
-      json_agg(DISTINCT jsonb_build_object('id', t.id, 'name', t.name))
-      FILTER (WHERE t.id IS NOT NULL), '[]'
-    ) AS tags,
-    COUNT(DISTINCT l2.id) AS liked_count,
+    COALESCE(tag_agg.tags, '[]'::json) AS tags,
+    COALESCE(like_agg.liked_count, 0) AS liked_count,
     true AS is_liked,
-    MAX(l.created_at) AS liked_at
+    l.created_at AS liked_at
     FROM images i
     INNER JOIN likes l ON l.image_id = i.id AND l.user_id = $1
-    LEFT JOIN image_tags it ON it.image_id = i.id
-    LEFT JOIN tags t ON t.id = it.tag_id
-    LEFT JOIN likes l2 ON l2.image_id = i.id
-    GROUP BY i.id
+    LEFT JOIN LATERAL (
+      SELECT json_agg(jsonb_build_object('id', t.id, 'name', t.name) ORDER BY t.name) AS tags
+      FROM image_tags it
+      JOIN tags t ON t.id = it.tag_id
+      WHERE it.image_id = i.id
+    ) tag_agg ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*) AS liked_count
+      FROM likes l2
+      WHERE l2.image_id = i.id
+    ) like_agg ON TRUE
     ORDER BY liked_at DESC
   `;
 

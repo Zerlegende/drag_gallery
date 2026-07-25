@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+/** Leere Env-Werte ("") wie "nicht gesetzt" behandeln, damit Defaults greifen */
+const optional = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => (value === "" ? undefined : value), schema);
+
 const serverEnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   MINIO_ENDPOINT: z.string().url(),
@@ -13,6 +17,10 @@ const serverEnvSchema = z.object({
   NEXTAUTH_URL: z.string().url().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
+  TELEGRAM_BOT_TOKEN: optional(z.string().optional()),
+  TELEGRAM_CHAT_ID: optional(z.string().optional()),
+  TELEGRAM_NOTIFY_ENABLED: optional(z.enum(["true", "false"]).default("true")),
+  TELEGRAM_BATCH_MINUTES: optional(z.coerce.number().positive().max(60).default(5)),
 });
 
 const clientEnvSchema = z.object({
