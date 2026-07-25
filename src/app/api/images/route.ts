@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { getImageById, getImagesWithTags, upsertTags, withTransaction } from "@/lib/db";
-import { telegramNotifier } from "@/lib/telegram-notifier";
 import { variantQueue } from "@/lib/variant-queue";
 
 const bodySchema = z.object({
@@ -76,15 +75,11 @@ export async function POST(request: Request) {
     return id;
   });
 
-  // Add to variant processing queue (max 2 concurrent)
+  // Add to variant processing queue.
+  // Die Telegram-Meldung passiert bewusst NICHT hier, sondern erst wenn die
+  // Verarbeitung wirklich durchgelaufen ist – hier ist das Bild nur abgelegt,
+  // noch nicht konvertiert, und könnte weiterhin scheitern.
   variantQueue.add(imageId, parsed.data.key, parsed.data.mime ?? 'image/avif');
-
-  // Telegram-Report sammeln (wird gebündelt verschickt)
-  telegramNotifier.record({
-    username: session.user.name ?? "Unbekannt",
-    filename: parsed.data.filename,
-    size: parsed.data.size ?? null,
-  });
 
   const image = await getImageById(imageId);
   if (!image) {

@@ -23,7 +23,21 @@
       "Bash(node migration-test.mjs)",
       "Bash(grep -vE \"^import\\\\{|^\\\\s*$\")",
       "Bash(DATABASE_URL=\"postgresql://u:p@127.0.0.1:59999/nope\" MINIO_ENDPOINT=\"http://127.0.0.1:9000\" MINIO_BUCKET=b MINIO_ACCESS_KEY=k MINIO_SECRET_KEY=s NEXTAUTH_SECRET=0123456789abcdefghij NEXT_PUBLIC_APP_NAME=x NEXT_PUBLIC_MINIO_BUCKET=b PORT=3999 timeout 40 npx next start -p 3999)",
-      "Bash(node bench.mjs)"
+      "Bash(node bench.mjs)",
+      "Bash(railway --version)",
+      "Bash(node --env-file=.env scripts/run-migrations.js)",
+      "Bash(node --env-file=.env -e ' *)",
+      "Bash(node -e \"require\\('@aws-sdk/client-s3'\\)\")",
+      "Bash(NODE_PATH=\"$\\(pwd\\)/node_modules\" node --env-file=.env \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/find-orphans.js\")",
+      "Bash(NODE_PATH=\"$\\(pwd\\)/node_modules\" node --env-file=.env \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/find-orphans-minio.js\")",
+      "Bash(NODE_PATH=\"$\\(pwd\\)/node_modules\" node --env-file=.env \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/delete-orphans.js\")",
+      "Bash(NODE_PATH=__CMDSUB_OUTPUT__/node_modules node --env-file=.env -e ' *)",
+      "Bash(rm -rf __TRACKED_VAR__/build3)",
+      "Bash(node \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/progress-test.js\")",
+      "PowerShell($env:DATABASE_URL=\"postgresql://u:p@localhost:5432/x\"; $env:MINIO_ENDPOINT=\"http://127.0.0.1:9000\"; $env:MINIO_BUCKET=\"b\"; $env:MINIO_ACCESS_KEY=\"k\"; $env:MINIO_SECRET_KEY=\"s\"; $env:NEXTAUTH_SECRET=\"0123456789abcdefghij\"; $env:NEXT_PUBLIC_APP_NAME=\"x\"; $env:NEXT_PUBLIC_MINIO_BUCKET=\"b\"; npm run build 2>&1 | Select-String -Pattern \"Compiled|TypeScript|error|Failed\")",
+      "Bash(rm -rf __TRACKED_VAR__/build4)",
+      "Bash(node \"C:/Users/eii/AppData/Local/Temp/claude/d--studium-bz-bilder-collector/b3a0d318-952f-4c25-aa2e-263b7a383677/scratchpad/telegram-success-test.js\")",
+      "Bash(node __TRACKED_VAR__/progress-test.js)"
     ]
   }
 }

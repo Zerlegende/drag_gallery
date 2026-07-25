@@ -7,15 +7,29 @@ import { getObject, putObject } from './storage';
 import { VARIANT_SIZES, type VariantName, getVariantKey } from './image-variants-utils';
 
 /**
+ * Rückmeldungen über echte Zwischenschritte, damit der Fortschrittsbalken
+ * nicht raten muss. Die Anzahl der Varianten ist VARIANT_COUNT.
+ */
+export type VariantProgress = {
+  /** Original wurde vollständig aus dem Objektspeicher geladen */
+  onDownloaded?: () => void;
+  /** Eine Variante ist fertig erzeugt und hochgeladen */
+  onVariant?: (name: string) => void;
+};
+
+export const VARIANT_COUNT = Object.keys(VARIANT_SIZES).length;
+
+/**
  * Generate all image variants from original key
  * Downloads original from MinIO, resizes, and uploads variants
  */
 export async function generateImageVariants(
   originalKey: string,
-  mime: string = 'image/avif'
+  mime: string = 'image/avif',
+  progress?: VariantProgress
 ): Promise<Record<VariantName, string>> {
   const stream = await getObject(originalKey);
-  
+
   if (!stream) {
     throw new Error(`Failed to fetch original image: ${originalKey}`);
   }
@@ -30,10 +44,12 @@ export async function generateImageVariants(
     throw new Error(`Original image is empty: ${originalKey}`);
   }
 
+  progress?.onDownloaded?.();
+
   const variants: Record<string, string> = {};
   const uploadPromises = Object.entries(VARIANT_SIZES).map(async ([name, width]) => {
     const variantKey = getVariantKey(originalKey, width);
-    
+
     const resizedBuffer = await sharp(originalBuffer)
       .resize(width, null, {
         withoutEnlargement: true,
@@ -43,8 +59,9 @@ export async function generateImageVariants(
       .toBuffer();
 
     await putObject(variantKey, resizedBuffer, 'image/avif');
-    
+
     variants[name] = variantKey;
+    progress?.onVariant?.(name);
   });
 
   await Promise.all(uploadPromises);

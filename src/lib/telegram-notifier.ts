@@ -14,7 +14,10 @@ import { withRetry } from "@/lib/retry";
 export type UploadEvent = {
   username: string;
   filename: string;
+  /** Endgültig belegter Speicher nach der AVIF-Konvertierung */
   size: number | null;
+  /** Größe der hochgeladenen Datei vor der Konvertierung */
+  originalSize?: number | null;
 };
 
 const TELEGRAM_API = "https://api.telegram.org";
@@ -123,12 +126,27 @@ class TelegramUploadNotifier {
 
     const minutes = this.config.windowMs / 60_000;
     const totalSize = batch.reduce((sum, event) => sum + (event.size ?? 0), 0);
+    const totalOriginal = batch.reduce(
+      (sum, event) => sum + (event.originalSize ?? event.size ?? 0),
+      0,
+    );
 
     const lines: string[] = [
-      `📸 <b>${pluralBilder(batch.length)}</b> in den letzten ${minutes} Min. hochgeladen` +
-        (totalSize > 0 ? ` (${formatBytes(totalSize)})` : ""),
-      "",
+      `📸 <b>${pluralBilder(batch.length)}</b> in den letzten ${minutes} Min. fertig verarbeitet`,
     ];
+
+    if (totalSize > 0) {
+      // Nur wenn wirklich komprimiert wurde – AVIF-Uploads gehen unverändert durch
+      const saved = totalOriginal - totalSize;
+      const percent = totalOriginal > 0 ? Math.round((saved / totalOriginal) * 100) : 0;
+      lines.push(
+        saved > 0
+          ? `💾 ${formatBytes(totalSize)} belegt (aus ${formatBytes(totalOriginal)}, −${percent}%)`
+          : `💾 ${formatBytes(totalSize)} belegt`,
+      );
+    }
+
+    lines.push("");
 
     const sortedUsers = [...byUser.entries()].sort(
       (a, b) => b[1].length - a[1].length,

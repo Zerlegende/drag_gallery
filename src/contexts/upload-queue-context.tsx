@@ -35,17 +35,34 @@ export type QueueItem = {
   retryAt?: number;
   contentHash?: string;
   duplicateOf?: DuplicateInfo;
+  /** Was der Server gerade mit dem Bild macht */
+  phase?: ProcessingPhase;
+  /** Warteposition und Länge der Server-Queue, solange noch nichts läuft */
+  queuePosition?: number;
+  queueLength?: number;
 };
 
 export type RejectedFile = { name: string; reason: string };
 
-export type ServerImage = { id: string; filename: string; variant_status: string };
+export type ProcessingPhase = "downloading" | "converting" | "variants";
+
+export type ServerImage = {
+  id: string;
+  filename: string;
+  variant_status: string;
+  /** Was gerade passiert – nur während 'processing' gesetzt */
+  phase: ProcessingPhase | null;
+  completedSteps: number | null;
+  totalSteps: number | null;
+  /** Warteposition, nur während 'pending' gesetzt */
+  queuePosition: number | null;
+  queueLength: number;
+};
+
 export type ServerStatus = {
   images: ServerImage[];
+  unknown?: string[];
   queue: { queueLength: number; processing: number; maxConcurrent: number };
-  total: number;
-  pending: number;
-  processing: number;
 };
 
 type UploadQueueContextType = {
@@ -76,8 +93,6 @@ const RETRY_DELAY_MS = 10_000;
 
 /** Poll-Intervall des einen globalen Status-Pollers */
 const POLL_INTERVAL_MS = 2_000;
-/** So viele aufeinanderfolgende "nicht mehr in der Liste"-Antworten gelten als fertig */
-const NOT_FOUND_THRESHOLD = 4;
 /**
  * So oft hintereinander muss ein Bild noch offen sein, während die Server-Queue
  * komplett leer ist, bevor es als verwaist gilt. Das passiert, wenn der Server
@@ -105,8 +120,6 @@ const DUPLICATE_BATCH_SIZE = 25;
 type ProcessingMeta = {
   imageId: string;
   startedAt: number;
-  estimatedMs: number;
-  notFound: number;
   orphaned: number;
 };
 
@@ -239,64 +252,94 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     let cancelled = false;
 
     const tick = async () => {
+      // Gezielt nach den eigenen Bildern fragen – die Antwort ist dadurch
+      // eindeutig ('completed' inklusive) statt aus Abwesenheit erschlossen.
+      const waiting = queueRef.current.filter(i => i.status === "processing" && i.imageId);
+      if (waiting.length === 0) return;
+
       let data: ServerStatus | null = null;
       try {
-        const res = await fetch("/api/images/processing-status");
+        const res = await fetch("/api/images/processing-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: waiting.map(i => i.imageId) }),
+        });
         if (res.ok) data = await res.json();
       } catch {
-        // Netzwerkfehler: Fortschritt weiter schätzen, nichts als fertig melden
+        // Netzwerkfehler: alten Stand behalten, nichts als fertig melden
       }
-      if (cancelled) return;
+      if (cancelled || !data) return;
 
-      if (data) setServerStatus(data);
-      const serverById = data ? new Map(data.images.map(img => [img.id, img])) : null;
+      setServerStatus(data);
+      const serverById = new Map(data.images.map(img => [img.id, img]));
+      const unknown = new Set(data.unknown ?? []);
       // Server-Queue komplett leer, obwohl noch Bilder offen sind → verwaist
-      const serverIdle = data ? data.queue.queueLength === 0 && data.queue.processing === 0 : false;
+      const serverIdle = data.queue.queueLength === 0 && data.queue.processing === 0;
 
       // Entscheidungen außerhalb des State-Updaters treffen, damit der rein bleibt
       const patches = new Map<string, Partial<QueueItem>>();
       let anyCompleted = false;
 
-      for (const item of queueRef.current) {
-        if (item.status !== "processing") continue;
+      for (const item of waiting) {
         const meta = processingMetaRef.current.get(item.id);
         if (!meta) continue;
 
-        const elapsed = Date.now() - meta.startedAt;
-        const estimated = Math.min(93, Math.round((elapsed / meta.estimatedMs) * 93));
-
-        if (!serverById) {
-          patches.set(item.id, { processingProgress: estimated });
-          continue;
-        }
-
         const serverImage = serverById.get(meta.imageId);
 
-        if (serverImage?.variant_status === "failed") {
-          processingMetaRef.current.delete(item.id);
-          patches.set(item.id, { status: "error", error: "Verarbeitung fehlgeschlagen" });
-        } else if (!serverImage) {
-          meta.notFound++;
-          if (meta.notFound >= NOT_FOUND_THRESHOLD) {
+        // Bild existiert nicht mehr (gelöscht) – nicht weiter darauf warten
+        if (!serverImage) {
+          if (unknown.has(meta.imageId)) {
             processingMetaRef.current.delete(item.id);
             patches.set(item.id, { status: "done", processingProgress: 100 });
             anyCompleted = true;
-          } else {
-            patches.set(item.id, { processingProgress: estimated });
           }
-        } else {
-          meta.notFound = 0;
-          meta.orphaned = serverIdle ? meta.orphaned + 1 : 0;
+          continue;
+        }
 
-          if (meta.orphaned >= ORPHAN_THRESHOLD) {
-            processingMetaRef.current.delete(item.id);
-            patches.set(item.id, {
-              status: "error",
-              error: "Verarbeitung wurde unterbrochen – bitte erneut versuchen",
-            });
-          } else {
-            patches.set(item.id, { processingProgress: estimated });
-          }
+        if (serverImage.variant_status === "failed") {
+          processingMetaRef.current.delete(item.id);
+          patches.set(item.id, { status: "error", error: "Verarbeitung fehlgeschlagen" });
+          continue;
+        }
+
+        if (serverImage.variant_status === "completed") {
+          processingMetaRef.current.delete(item.id);
+          patches.set(item.id, { status: "done", processingProgress: 100 });
+          anyCompleted = true;
+          continue;
+        }
+
+        if (serverImage.variant_status === "processing") {
+          meta.orphaned = 0;
+          // Echter Fortschritt: abgeschlossene Teilschritte dieses Bildes
+          const { completedSteps, totalSteps, phase } = serverImage;
+          const percent = completedSteps !== null && totalSteps
+            ? Math.round((completedSteps / totalSteps) * 100)
+            : 0;
+          patches.set(item.id, {
+            processingProgress: percent,
+            phase: phase ?? undefined,
+            queuePosition: undefined,
+            queueLength: undefined,
+          });
+          continue;
+        }
+
+        // 'pending' – wartet noch auf einen freien Slot
+        meta.orphaned = serverIdle ? meta.orphaned + 1 : 0;
+        if (meta.orphaned >= ORPHAN_THRESHOLD) {
+          processingMetaRef.current.delete(item.id);
+          patches.set(item.id, {
+            status: "error",
+            error: "Verarbeitung wurde unterbrochen – bitte erneut versuchen",
+          });
+        } else {
+          patches.set(item.id, {
+            processingProgress: 0,
+            phase: undefined,
+            queuePosition: serverImage.queuePosition ?? undefined,
+            queueLength: serverImage.queueLength,
+          });
         }
       }
 
@@ -373,8 +416,6 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       processingMetaRef.current.set(item.id, {
         imageId,
         startedAt: Date.now(),
-        estimatedMs: Math.min(60_000, 8_000 + (item.file.size / (1024 * 1024)) * 4_000),
-        notFound: 0,
         orphaned: 0,
       });
       updateItem(item.id, { status: "processing", processingProgress: 0, imageId });

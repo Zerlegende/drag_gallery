@@ -8,15 +8,36 @@
 
 import { createHash } from 'crypto';
 import sharp from 'sharp';
-import { generateImageVariants } from './image-variants';
+import { generateImageVariants, VARIANT_COUNT } from './image-variants';
 import { getObject, putObject, deleteObject } from './storage';
 import { query, setImageContentHash } from './db';
+import { telegramNotifier } from './telegram-notifier';
+import { env } from './env';
 
 type QueueItem = {
   imageId: string;
   key: string;
   mime: string;
 };
+
+/** Was gerade mit dem Bild passiert – für die Anzeige im Client */
+export type ProcessingPhase = 'downloading' | 'converting' | 'variants';
+
+export type ImageProgress = {
+  phase: ProcessingPhase;
+  /** Abgeschlossene Arbeitsschritte */
+  completed: number;
+  /** Gesamtzahl der Schritte für dieses Bild */
+  total: number;
+};
+
+/**
+ * Schritte pro Bild. Das sind echte, abgeschlossene Teilarbeiten – kein
+ * Zeitschätzer. Bilder, die schon als AVIF ankommen, überspringen die
+ * Konvertierung und haben deshalb weniger Schritte.
+ */
+const STEPS_WITH_CONVERSION = 3 + 1 + VARIANT_COUNT; // laden, konvertieren, hochladen + Varianten
+const STEPS_ALREADY_AVIF = 1 + VARIANT_COUNT;        // nur Varianten (inkl. deren Download)
 
 /**
  * Nach dieser Zeit gilt die Verarbeitung eines Bildes als hängend. Ein
@@ -28,9 +49,16 @@ const PROCESSING_TIMEOUT_MS = 10 * 60 * 1000;
 class VariantQueue {
   private queue: QueueItem[] = [];
   private processing = 0;
-  private readonly maxConcurrent = 2;
+  /**
+   * Gleichzeitig verarbeitete Bilder. Achtung: jeder Slot erzeugt seine drei
+   * Größen parallel, es laufen also bis zu 3x so viele Sharp-Operationen.
+   * Über VARIANT_CONCURRENCY einstellbar.
+   */
+  private readonly maxConcurrent = env.server().VARIANT_CONCURRENCY;
   /** IDs in Queue oder Verarbeitung – verhindert doppeltes Einreihen */
   private known = new Set<string>();
+  /** Echter Fortschritt der aktuell verarbeiteten Bilder */
+  private progress = new Map<string, ImageProgress>();
 
   async add(imageId: string, key: string, mime: string) {
     // Beim Recovery kann dasselbe Bild sonst mehrfach in die Queue geraten
@@ -65,13 +93,17 @@ class VariantQueue {
       // Der Timeout bricht die laufende Arbeit nicht wirklich ab (Sharp und
       // die S3-Requests laufen weiter), gibt aber den Slot frei, damit die
       // restlichen Bilder nicht ewig warten.
-      await this.withTimeout(this.processItem(item), PROCESSING_TIMEOUT_MS);
+      const result = await this.withTimeout(this.processItem(item), PROCESSING_TIMEOUT_MS);
 
       // Update status to completed
       await query(
         'UPDATE images SET variant_status = $1 WHERE id = $2',
         ['completed', item.imageId]
       );
+
+      // Erst jetzt melden: das Bild ist fertig konvertiert und liegt endgültig
+      // im Speicher. Alles davor könnte noch scheitern.
+      await this.reportSuccess(item.imageId, result.originalBytes);
     } catch (error) {
       console.error(`Processing failed: ${item.imageId}`, error);
 
@@ -83,6 +115,7 @@ class VariantQueue {
     } finally {
       this.processing--;
       this.known.delete(item.imageId);
+      this.progress.delete(item.imageId);
 
       // Process next item in queue
       this.processNext();
@@ -91,23 +124,82 @@ class VariantQueue {
 
   /**
    * Konvertierung und Variantenerzeugung für ein Bild.
+   * Meldet nach jedem echten Teilschritt den Fortschritt.
    */
-  private async processItem(item: QueueItem) {
+  private async processItem(item: QueueItem): Promise<{ originalBytes: number | null }> {
+    const needsConversion = item.mime !== 'image/avif';
+    const total = needsConversion ? STEPS_WITH_CONVERSION : STEPS_ALREADY_AVIF;
+    let completed = 0;
+
+    /** Phase wechseln, ohne einen Schritt als erledigt zu zählen */
+    const enter = (phase: ProcessingPhase) =>
+      this.progress.set(item.imageId, { phase, completed, total });
+    /** Einen abgeschlossenen Schritt melden */
+    const advance = (phase: ProcessingPhase) => {
+      completed++;
+      this.progress.set(item.imageId, { phase, completed, total });
+    };
+
     let processingKey = item.key;
     let processingMime = item.mime;
+    // Größe vor der Konvertierung – wird für den Telegram-Report gebraucht,
+    // da die DB-Spalte danach die komprimierte Größe enthält.
+    let originalBytes: number | null = null;
 
     // Step 1: Convert to AVIF if not already AVIF
-    if (item.mime !== 'image/avif') {
-      processingKey = await this.convertOriginalToAvif(item.key, item.imageId);
+    if (needsConversion) {
+      enter('downloading');
+      const converted = await this.convertOriginalToAvif(item.key, item.imageId, advance);
+      processingKey = converted.avifKey;
+      originalBytes = converted.originalBytes;
       processingMime = 'image/avif';
     } else {
+      enter('downloading');
       // Kein Konvertierungsschritt, der das Original ohnehin lädt – deshalb
       // nur dann nachladen, wenn der Hash wirklich noch fehlt.
       await this.backfillContentHash(item.imageId, item.key);
     }
 
     // Step 2: Generate size variants (@300, @800, @1600) from the (now AVIF) original
-    await generateImageVariants(processingKey, processingMime);
+    enter('variants');
+    await generateImageVariants(processingKey, processingMime, {
+      onDownloaded: () => advance('variants'),
+      onVariant: () => advance('variants'),
+    });
+
+    return { originalBytes };
+  }
+
+  /**
+   * Meldet ein fertig verarbeitetes Bild an den Telegram-Sammler.
+   * Liest die endgültige (komprimierte) Größe aus der DB, die zu diesem
+   * Zeitpunkt bereits die AVIF-Größe enthält.
+   */
+  private async reportSuccess(imageId: string, originalBytes: number | null) {
+    try {
+      const rows = await query<{ filename: string; size: string | null; username: string | null }>(
+        `SELECT i.filename, i.size, u.username
+         FROM images i
+         LEFT JOIN users u ON u.id = i.uploaded_by
+         WHERE i.id = $1`,
+        [imageId]
+      );
+
+      const row = rows[0];
+      if (!row) return;
+
+      const storedBytes = Number(row.size) || 0;
+      telegramNotifier.record({
+        username: row.username ?? 'Unbekannt',
+        filename: row.filename,
+        size: storedBytes,
+        // Bilder, die schon als AVIF ankamen, wurden nicht komprimiert
+        originalSize: originalBytes ?? storedBytes,
+      });
+    } catch (error) {
+      // Ein fehlgeschlagener Report darf die Verarbeitung nicht beeinflussen
+      console.error(`Telegram-Report konnte nicht erstellt werden: ${imageId}`, error);
+    }
   }
 
   private withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -179,12 +271,17 @@ class VariantQueue {
    * Convert original image to AVIF, upload it, update DB key, delete old original.
    * Returns the new AVIF key.
    */
-  private async convertOriginalToAvif(originalKey: string, imageId: string): Promise<string> {
+  private async convertOriginalToAvif(
+    originalKey: string,
+    imageId: string,
+    advance?: (phase: ProcessingPhase) => void,
+  ): Promise<{ avifKey: string; originalBytes: number }> {
     const originalBuffer = await this.downloadToBuffer(originalKey);
 
     if (originalBuffer.length === 0) {
       throw new Error(`Original image is empty: ${originalKey}`);
     }
+    advance?.('converting');
 
     // Hash über die Originalbytes, bevor konvertiert wird – danach sind sie weg
     await this.storeContentHash(imageId, originalBuffer);
@@ -193,12 +290,14 @@ class VariantQueue {
     const avifBuffer = await sharp(originalBuffer)
       .avif({ quality: 80, effort: 4 })
       .toBuffer();
+    advance?.('converting');
 
     // New key with .avif extension
     const avifKey = originalKey.replace(/\.[^/.]+$/, '.avif');
 
     // Upload AVIF version
     await putObject(avifKey, avifBuffer, 'image/avif');
+    advance?.('variants');
 
     // Update DB: new key, mime, size, and filename
     const avifFilename = originalKey.split('/').pop()?.replace(/\.[^/.]+$/, '.avif') || 'image.avif';
@@ -216,7 +315,7 @@ class VariantQueue {
       }
     }
 
-    return avifKey;
+    return { avifKey, originalBytes: originalBuffer.length };
   }
 
   getStatus() {
@@ -225,6 +324,21 @@ class VariantQueue {
       processing: this.processing,
       maxConcurrent: this.maxConcurrent,
     };
+  }
+
+  /** Echter Fortschritt eines gerade verarbeiteten Bildes, sonst null */
+  getProgress(imageId: string): ImageProgress | null {
+    return this.progress.get(imageId) ?? null;
+  }
+
+  /**
+   * Wartepositionen aller noch nicht gestarteten Bilder (1-basiert).
+   * Damit kann der Client "Position 12 von 40" anzeigen statt zu raten.
+   */
+  getQueuePositions(): Map<string, number> {
+    const positions = new Map<string, number>();
+    this.queue.forEach((item, index) => positions.set(item.imageId, index + 1));
+    return positions;
   }
 }
 

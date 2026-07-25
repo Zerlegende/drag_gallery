@@ -11,6 +11,24 @@ function isFinished(item: QueueItem) {
   return item.status === "done" || item.status === "error" || item.status === "duplicate";
 }
 
+const PHASE_LABELS: Record<NonNullable<QueueItem["phase"]>, string> = {
+  downloading: "Wird geladen",
+  converting: "Wird konvertiert",
+  variants: "Größen werden erzeugt",
+};
+
+/**
+ * Sagt, was gerade wirklich passiert. Solange das Bild nur in der
+ * Server-Warteschlange steht, wird die Position genannt statt ein Prozentwert.
+ */
+function processingLabel(item: QueueItem): string {
+  if (item.phase) return PHASE_LABELS[item.phase];
+  if (item.queuePosition && item.queueLength) {
+    return `Warteposition ${item.queuePosition} von ${item.queueLength}`;
+  }
+  return "Warte auf Verarbeitung";
+}
+
 /**
  * Maximale Anzahl gleichzeitig gerenderter Zeilen. Bei mehreren hundert Uploads
  * würde sonst jedes Progress-Update die komplette Liste neu rendern.
@@ -298,10 +316,12 @@ const QueueItemRow = memo(function QueueItemRow({ item, serverImage, onRemove, o
         {showProcess && (
           <div className="mt-1.5 space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{serverImage?.variant_status === "pending" ? "Warte auf Verarbeitung" : "Wird verarbeitet"}</span>
-              <span>{item.processingProgress}%</span>
+              <span className="truncate">{processingLabel(item)}</span>
+              {/* Prozent nur zeigen, wenn wirklich gearbeitet wird – beim
+                  Warten in der Schlange wäre jede Zahl gelogen. */}
+              {item.phase && <span className="shrink-0 ml-2">{item.processingProgress}%</span>}
             </div>
-            <ProgressBar value={item.processingProgress} color="violet" animated />
+            <ProgressBar value={item.processingProgress} color="violet" animated={!!item.phase} />
           </div>
         )}
 

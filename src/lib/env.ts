@@ -21,6 +21,9 @@ const serverEnvSchema = z.object({
   TELEGRAM_CHAT_ID: optional(z.string().optional()),
   TELEGRAM_NOTIFY_ENABLED: optional(z.enum(["true", "false"]).default("true")),
   TELEGRAM_BATCH_MINUTES: optional(z.coerce.number().positive().max(60).default(5)),
+  // Gleichzeitig verarbeitete Bilder. Jeder Slot erzeugt seine 3 Größen
+  // parallel, belegt also ~3 Sharp-Operationen und grob 1–1,5 GB RAM.
+  VARIANT_CONCURRENCY: optional(z.coerce.number().int().positive().max(32).default(8)),
 });
 
 const clientEnvSchema = z.object({
