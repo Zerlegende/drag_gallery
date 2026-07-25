@@ -328,10 +328,35 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [], archi
     }
   };
 
+  /**
+   * Fenster von Seitenzahlen rund um die aktuelle Seite.
+   * Am Rand wird das Fenster verschoben statt gestaucht, damit immer
+   * gleich viele Buttons zu sehen sind.
+   */
+  const getPageNumbers = (count: number) => {
+    const size = Math.min(count, totalPages);
+    let start = currentPage - Math.floor(size / 2);
+    start = Math.min(start, totalPages - size + 1);
+    start = Math.max(1, start);
+    return Array.from({ length: size }, (_, i) => start + i);
+  };
+
   // Pagination component (reusable)
   const renderPagination = (scrollOnClick: boolean = false) => {
     if (totalPages <= 1) return null;
-    
+
+    const pageButton = (pageNum: number) => (
+      <Button
+        key={pageNum}
+        onClick={() => handlePageChange(pageNum, scrollOnClick)}
+        size="sm"
+        variant={currentPage === pageNum ? "default" : "outline"}
+        className="px-2 md:px-3 min-w-[2rem]"
+      >
+        {pageNum}
+      </Button>
+    );
+
     return (
       <div className={cn(
         "flex justify-center items-center gap-1 md:gap-2",
@@ -358,31 +383,17 @@ export function GalleryShell({ initialImages, allTags, initialFilter = [], archi
           <span className="hidden md:inline">Zurück</span>
         </Button>
         
-        <div className="flex items-center gap-1 md:gap-2">
-          {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
-            let pageNum;
-            if (totalPages <= 3) {
-              pageNum = i + 1;
-            } else if (currentPage <= 2) {
-              pageNum = i + 1;
-            } else if (currentPage >= totalPages - 1) {
-              pageNum = totalPages - 2 + i;
-            } else {
-              pageNum = currentPage - 1 + i;
-            }
-            
-            return (
-              <Button
-                key={pageNum}
-                onClick={() => handlePageChange(pageNum, scrollOnClick)}
-                size="sm"
-                variant={currentPage === pageNum ? "default" : "outline"}
-                className="px-2 md:px-3 min-w-[2rem]"
-              >
-                {pageNum}
-              </Button>
-            );
-          })}
+        {/* Seitenzahlen je nach Platz: mobil 3, ab md 5, ab lg 7.
+            Umschaltung per CSS statt per JS – sonst würde nach der Hydration
+            kurz die falsche Variante stehen. */}
+        <div className="flex items-center gap-1 md:hidden">
+          {getPageNumbers(3).map(pageButton)}
+        </div>
+        <div className="hidden md:flex lg:hidden items-center gap-2">
+          {getPageNumbers(5).map(pageButton)}
+        </div>
+        <div className="hidden lg:flex items-center gap-2">
+          {getPageNumbers(7).map(pageButton)}
         </div>
         <Button
           onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1), scrollOnClick)}
